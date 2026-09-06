@@ -96,5 +96,41 @@ console.log('\nLas pantallas donde se cortaba algo');
   ok('el botón de registrar admite dos líneas', /dosLineas/.test(registrar));
 }
 
+
+console.log('\nLa ficha de nutrición del alumno');
+{
+  const nutri = lee('components/PanelDeNutricion.tsx');
+  /*
+   * Los tres botones de las fotos salían como "F…", "P…" y "E…" en un iPhone
+   * normal. Son tres en una fila: con el relleno de siempre (24 a cada lado) al
+   * texto le quedaban 52 px para una palabra que mide 68.
+   *
+   * El `paddingHorizontal` que había en `poseBtn` NO servía de nada: ese estilo
+   * va al envoltorio del botón, no a su interior. Lo que lo cambia es
+   * `compacto`, que el propio Button documenta para justo este caso.
+   */
+  ok('los botones de las fotos van compactos', /loading=\{uploadingPose === pose\.key\}[\s\S]{0,400}?compacto/.test(nutri));
+  ok('y no fingen relleno donde no se aplica', !/poseBtn: \{[^}]*paddingHorizontal/.test(nutri));
+  // Y en 320 px ni así caben los tres: la fila se parte antes que cortar.
+  ok('la fila se parte antes que cortar', /poseRow: \{[\s\S]{0,300}?flexWrap: 'wrap'/.test(nutri));
+  ok('con un ancho mínimo que lo dispare', /poseBtn: \{[^}]*minWidth: \d+/.test(nutri));
+
+  const pasos = lee('components/ContadorDePasos.tsx');
+  // "Los escribo yo" se salía por el borde derecho de su tarjeta.
+  ok('el selector de origen envuelve', /elegirBotones: \{[\s\S]{0,300}?flexWrap: 'wrap'/.test(pasos));
+  // Con el botón fijo al lado, al campo le quedaban 80 px y "Ej. 9500" se
+  // leía "Ej. 950".
+  ok('el campo de pasos tiene ancho mínimo', /campo: \{[^}]*minWidth: \d+/.test(pasos));
+  ok('y su fila también se parte', /filaMano: \{[^}]*flexWrap: 'wrap'/.test(pasos));
+
+  const peso = lee('components/BloqueDePeso.tsx');
+  /*
+   * "Peso en kg (ej. 66,4)" no cabía en el hueco que deja el botón de al lado y
+   * se leía sin cerrar el paréntesis. Y sobraba: la tarjeta ya se llama "Mi
+   * peso" y el botón dice "Apuntar".
+   */
+  ok('el ejemplo del peso es corto', /placeholder="Ej\. 66,4 kg"/.test(peso));
+}
+
 console.log(fallos === 0 ? '\nTodo correcto ✔' : `\n${fallos} fallo(s)`);
 process.exit(fallos === 0 ? 0 : 1);

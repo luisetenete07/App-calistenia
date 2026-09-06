@@ -139,7 +139,14 @@ export function BloqueDePeso({
 
         <View style={styles.apuntar}>
           <TextField
-            placeholder="Peso en kg (ej. 66,4)"
+            /*
+             * Corto a propósito. "Peso en kg (ej. 66,4)" no cabía en el hueco
+             * que deja el botón de al lado y se leía "Peso en kg (ej. 66,4",
+             * sin cerrar. Y sobraba: la tarjeta se llama "Mi peso" y el botón
+             * dice "Apuntar", así que lo único que falta por decir es la unidad
+             * y que se puede usar coma. Mismo formato que el de los pasos.
+             */
+            placeholder="Ej. 66,4 kg"
             keyboardType="decimal-pad"
             value={peso}
             onChangeText={setPeso}

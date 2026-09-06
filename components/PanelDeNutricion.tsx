@@ -471,6 +471,13 @@ export function PanelDeNutricion() {
               variant="secondary"
               onPress={() => handleAddPhoto(pose.key)}
               loading={uploadingPose === pose.key}
+              /*
+               * `compacto` no es un adorno: son tres botones en una fila de
+               * móvil. Con el relleno normal (24 a cada lado) al texto le
+               * quedaban 52 px para una palabra que mide 68, y "Frente",
+               * "Perfil" y "Espalda" salían como "F…", "P…" y "E…".
+               */
+              compacto
               style={styles.poseBtn}
             />
           ))}
@@ -682,8 +689,21 @@ const styles = StyleSheet.create({
   bookPhotoWrap: { marginRight: spacing.sm, width: 130 },
   bookPhoto: { width: 130, height: 165, borderRadius: radius.md, backgroundColor: colors.surfaceAlt },
   bookCaption: { ...typography.small, color: colors.textMuted, marginTop: 4, fontSize: 11 },
-  poseRow: { flexDirection: 'row', gap: spacing.sm },
-  poseBtn: { flex: 1, paddingHorizontal: spacing.sm },
+  /*
+   * Se parte en dos filas antes que cortar una palabra.
+   *
+   * Con `compacto` los tres caben en un móvil normal, pero en uno de 320 px a
+   * "Espalda" le faltan quince píxeles. Con un ancho mínimo y permiso para
+   * envolver, ahí se colocan dos arriba y uno abajo y se leen los tres. Es el
+   * mismo criterio que ya usan las otras filas de botones de la app.
+   */
+  poseRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  /*
+   * Sin `paddingHorizontal`: este estilo va al ENVOLTORIO del botón, no a su
+   * interior, así que ponerlo aquí no quitaba ni un píxel de relleno. Lo que
+   * de verdad lo cambia es la propiedad `compacto`.
+   */
+  poseBtn: { flexGrow: 1, flexBasis: 92, minWidth: 92 },
   photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
   photoCard: { width: '31%' },
   photo: { width: '100%', aspectRatio: 0.8, borderRadius: radius.md, backgroundColor: colors.surfaceAlt },

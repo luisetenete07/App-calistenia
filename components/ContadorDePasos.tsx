@@ -538,6 +538,9 @@ const styles = StyleSheet.create({
   elegirBotones: {
     flexDirection: 'row',
     alignItems: 'center',
+    // Envuelve antes que salirse: en un móvil de 320 px "Los escribo yo" se
+    // salía por el borde derecho de la tarjeta y se leía a medias.
+    flexWrap: 'wrap',
     gap: spacing.md,
     marginTop: spacing.md,
   },
@@ -581,9 +584,18 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
   },
   opcionFuenteTexto: { ...typography.body, color: colors.text, flex: 1 },
-  filaMano: { flexDirection: 'row', alignItems: 'stretch', gap: spacing.sm },
-  campo: { flex: 1, marginBottom: 0 },
+  /*
+   * El campo y su botón, en una fila que se parte si hace falta. Con el botón
+   * fijo al lado, en 320 px al campo le quedaban ochenta píxeles y el ejemplo
+   * "Ej. 9500" se leía "Ej. 950".
+   */
+  filaMano: { flexDirection: 'row', alignItems: 'stretch', flexWrap: 'wrap', gap: spacing.sm },
+  campo: { flexGrow: 1, flexBasis: 130, minWidth: 130, marginBottom: 0 },
   botonMano: {
+    // Al envolver, el botón pasa a ocupar la fila entera en vez de quedarse
+    // encogido a la izquierda.
+    flexGrow: 1,
+    alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.md,
     borderRadius: radius.md,
