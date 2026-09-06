@@ -154,5 +154,34 @@ console.log('\nY declarado donde Android lo mira');
   ok('sin rango que se abra solo', typeof version === 'string' && !version.startsWith('^'), version);
 }
 
+
+console.log('\nY contado en la política de privacidad');
+{
+  /*
+   * Google TUMBA la declaración de datos de salud si la política enlazada no
+   * menciona Health Connect y qué se hace con lo que se lee. Y es de las cosas
+   * que se quedan viejas sin que salte nada: el código lee pasos y el texto
+   * sigue hablando de lo de antes.
+   *
+   * Está en DOS sitios —la web pública y la pantalla de dentro de la app— y las
+   * dos tienen que decir lo mismo: la de la web es la que ve Google, la de la
+   * app es la que ve el usuario.
+   */
+  for (const [ruta, quien] of [
+    ['web/privacidad.html', 'la de la web, que es la que mira Google'],
+    ['app/privacy-policy.tsx', 'la de dentro de la app'],
+  ]) {
+    const t = lee(ruta);
+    ok(`${quien}: nombra Health Connect`, /Health Connect/.test(t));
+    ok(`${quien}: dice que solo se leen los pasos`, /pasos/i.test(t) && /[Ss]olo leemos|no escribe/.test(t));
+    // Lo que Google mira con lupa: que no se venda ni se use para publicidad.
+    ok(`${quien}: descarta publicidad y venta`, /publicidad/i.test(t) && /(vende|comparte con terceros)/i.test(t));
+    // Y cómo se corta, que es el derecho que tiene que poder ejercer.
+    ok(`${quien}: dice cómo retirar el permiso`, /retirar el permiso|withdraw the permission/i.test(t));
+  }
+  // La fecha es lo que dice si la política cubre lo que la app hace HOY.
+  ok('la fecha está al día', /Última actualización: septiembre/.test(lee('web/privacidad.html')));
+}
+
 console.log(fallos === 0 ? '\nTodo correcto ✔' : `\n${fallos} fallo(s)`);
 process.exit(fallos === 0 ? 0 : 1);
