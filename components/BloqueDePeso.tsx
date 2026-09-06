@@ -150,7 +150,7 @@ export function BloqueDePeso({
             keyboardType="decimal-pad"
             value={peso}
             onChangeText={setPeso}
-            containerStyle={{ flex: 1 }}
+            containerStyle={{ flexGrow: 1, flexBasis: 150, minWidth: 150 }}
             style={{ marginBottom: 0 }}
           />
           <Button title="Apuntar" onPress={guardar} loading={guardando} style={styles.boton} />
@@ -220,11 +220,17 @@ const styles = StyleSheet.create({
   apuntar: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+    /*
+     * Se parte si no cabe. Con el botón fijo de 104 px al lado, en un móvil de
+     * 320 al campo le quedaban unos 120 y ni "Ej. 66,4 kg" entraba. Partiéndose
+     * el campo ocupa la fila y el botón baja debajo, que se lee perfectamente.
+     */
+    flexWrap: 'wrap',
     gap: spacing.sm,
     marginTop: spacing.md,
     marginBottom: spacing.sm,
   },
-  boton: { minWidth: 104 },
+  boton: { flexGrow: 1, minWidth: 104 },
   error: { ...typography.small, color: colors.danger, marginTop: spacing.sm },
   deshacer: {
     flexDirection: 'row',

@@ -130,6 +130,17 @@ console.log('\nLa ficha de nutrición del alumno');
    * peso" y el botón dice "Apuntar".
    */
   ok('el ejemplo del peso es corto', /placeholder="Ej\. 66,4 kg"/.test(peso));
+  // Acortarlo no bastaba: con el botón fijo de 104 px al lado, en 320 px ni el
+  // corto entraba. La fila se parte y el campo ocupa el ancho.
+  ok('y su fila se parte si no cabe', /apuntar: \{[\s\S]{0,600}?flexWrap: 'wrap'/.test(peso));
+  ok('con ancho mínimo en el campo', /containerStyle=\{\{ flexGrow: 1, flexBasis: \d+, minWidth: \d+ \}\}/.test(peso));
+
+  /*
+   * Y el título de una libreta de comidas: "Título (Ej. Recetas de desayuno)"
+   * tampoco cabía. Sobraba la palabra "Título", que ya la dice el encabezado.
+   */
+  ok('el título de la libreta es corto',
+    /placeholder="Ej\. Recetas de desayuno"/.test(lee('app/(trainer)/clients/meal-books.tsx')));
 }
 
 console.log(fallos === 0 ? '\nTodo correcto ✔' : `\n${fallos} fallo(s)`);

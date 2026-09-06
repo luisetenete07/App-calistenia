@@ -176,8 +176,11 @@ export default function MealBooksScreen() {
 
       <Card style={styles.createCard}>
         <Text style={styles.sectionTitle}>Nueva libreta</Text>
+        {/* El marcador va corto: "Título (Ej. Recetas de desayuno)" no cabía en
+            un móvil de 320 px y se leía sin cerrar el paréntesis. Y sobraba la
+            palabra "Título", que ya la dice el encabezado de la tarjeta. */}
         <TextField
-          placeholder="Título (Ej. Recetas de desayuno)"
+          placeholder="Ej. Recetas de desayuno"
           value={newTitle}
           onChangeText={setNewTitle}
         />
