@@ -14,8 +14,10 @@ import { conMiles } from './texto';
  *
  * - En iPhone se leen del contador del propio teléfono (el mismo que alimenta
  *   Salud), incluido lo andado con la app cerrada.
- * - En Android el sistema solo deja contar mientras la app está abierta, así
- *   que ahí la cifra del teléfono se SUMA a lo que ya hubiera del día en vez de
+ * - En Android se leen de Health Connect, el almacén de salud del sistema, que
+ *   sí guarda el día entero con la app cerrada (ver lib/pasosDeSalud.ts). En un
+ *   móvil que no lo tenga, lo único que queda es el sensor mientras la app está
+ *   delante, y entonces la cifra se SUMA a lo que ya hubiera del día en vez de
  *   sustituirlo: si se contara solo lo de la app abierta, abrir UDECA a las
  *   ocho de la tarde borraría el día entero.
  * - Y siempre se puede escribir a mano, que es lo que hace que esto funcione

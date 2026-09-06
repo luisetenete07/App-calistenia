@@ -7,7 +7,7 @@
       "entrenadores.app",
       "com.udeca.app"
     ],
-    "version": "1.0.5",
+    "version": "1.0.6",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -26,6 +26,10 @@
     },
     "android": {
       "package": "entrenadores.app",
+      "permissions": [
+        "android.permission.ACTIVITY_RECOGNITION",
+        "android.permission.health.READ_STEPS"
+      ],
       "blockedPermissions": [
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_MEDIA_VIDEO"
@@ -61,7 +65,16 @@
       ],
       "expo-apple-authentication",
       "./plugins/memoria-de-gradle",
-      "./plugins/optimizar-android"
+      "./plugins/optimizar-android",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
+        }
+      ],
+      "react-native-health-connect"
     ],
     "experiments": {
       "typedRoutes": true
