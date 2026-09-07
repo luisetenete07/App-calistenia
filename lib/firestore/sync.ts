@@ -14,6 +14,12 @@ import type { ActiveSession } from '../types';
 export interface SyncState {
   activeSession: ActiveSession | null;
   cycleAnchors: Record<string, number>;
+  /**
+   * Cuándo se decidió cada ancla. Va en un mapa aparte y no dentro del ancla
+   * para no cambiarle el tipo a `cycleAnchors`: una versión anterior de la app
+   * en otro móvil de la misma cuenta sigue leyendo ahí un número, como espera.
+   */
+  cycleAnchorsSetAt: Record<string, number>;
   onboardingCompleted: boolean;
 }
 
@@ -25,10 +31,11 @@ export async function fetchSyncState(uid: string): Promise<SyncState> {
     return {
       activeSession: (data.activeSession as ActiveSession) ?? null,
       cycleAnchors: (data.cycleAnchors as Record<string, number>) ?? {},
+      cycleAnchorsSetAt: (data.cycleAnchorsSetAt as Record<string, number>) ?? {},
       onboardingCompleted: Boolean(data.onboardingCompleted),
     };
   } catch {
-    return { activeSession: null, cycleAnchors: {}, onboardingCompleted: false };
+    return { activeSession: null, cycleAnchors: {}, cycleAnchorsSetAt: {}, onboardingCompleted: false };
   }
 }
 
@@ -50,14 +57,24 @@ export async function clearActiveSession(uid: string): Promise<void> {
   }
 }
 
-/** Fija el ancla del ciclo de una rutina (sincroniza el día del ciclo). */
+/**
+ * Fija el ancla del ciclo de una rutina (sincroniza el día del ciclo).
+ *
+ * Las dos cosas se escriben JUNTAS, en la misma operación. Si la fecha de la
+ * decisión pudiera quedarse atrás, el otro dispositivo vería un ancla nueva con
+ * una fecha vieja y podría descartarla por antigua.
+ */
 export async function setCycleAnchorRemote(
   uid: string,
   routineId: string,
-  ts: number
+  ts: number,
+  decididaEn: number
 ): Promise<void> {
   try {
-    await updateDoc(doc(db, 'users', uid), { [`cycleAnchors.${routineId}`]: ts });
+    await updateDoc(doc(db, 'users', uid), {
+      [`cycleAnchors.${routineId}`]: ts,
+      [`cycleAnchorsSetAt.${routineId}`]: decididaEn,
+    });
   } catch {
     // Ignorado: queda el ancla local del dispositivo como respaldo.
   }

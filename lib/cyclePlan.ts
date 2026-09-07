@@ -1,4 +1,4 @@
-import { inicioDeLaSemana, inicioDelDia } from './fechas';
+import { inicioDeLaSemana, inicioDelDia, masDias } from './fechas';
 import { t, frase  } from './idioma';
 import type { CycleLevel, TrainingCycle, WeekPlanEntry, WorkoutLog } from './types';
 
@@ -21,8 +21,21 @@ import type { CycleLevel, TrainingCycle, WeekPlanEntry, WorkoutLog } from './typ
  *    que se desplaza solo deja de ser un plan a la tercera semana.
  */
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-const WEEK_MS = 7 * DAY_MS;
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+/*
+ * LAS FECHAS SE MUEVEN CON `masDias`, NO SUMANDO MILISEGUNDOS
+ *
+ * Los dos domingos del año en que cambia la hora duran 23 o 25 horas. Sumando
+ * 7 × 86.400.000 el resultado cae a las 23:00 del día ANTERIOR, y una
+ * planificación de doce semanas casi siempre cruza uno de esos domingos: el
+ * plan decía "hasta el 5 de octubre" y en la pantalla ponía el 4, y el último
+ * día del bloque se daba por terminado una hora después de empezar.
+ *
+ * La constante se queda para la única cuenta donde sí es lo correcto: restar
+ * dos lunes ya redondeados a medianoche para saber cuántas semanas hay en
+ * medio, que va con `Math.round` y absorbe la hora de más o de menos.
+ */
 
 /** Un bloque del plan: el mesociclo y sus semanas. */
 export interface PlanBlock {
@@ -116,7 +129,7 @@ export function totalWeeks(draft: PlanDraft): number {
 }
 
 export function planEndDate(draft: PlanDraft): number {
-  return inicioDeLaSemana(draft.startDate) + totalWeeks(draft) * WEEK_MS - DAY_MS;
+  return masDias(inicioDeLaSemana(draft.startDate), totalWeeks(draft) * 7 - 1);
 }
 
 /**
@@ -134,7 +147,7 @@ export function buildPlan(draft: PlanDraft): PlannedCycle[] {
     level: 'macro',
     name: draft.name.trim() || 'Temporada',
     startDate: start,
-    endDate: start + semanas * WEEK_MS - DAY_MS,
+    endDate: masDias(start, semanas * 7 - 1),
     orderIndex: 1,
     goal: draft.goal?.trim() || undefined,
     targetSessions: draft.sessionsPerWeek > 0 ? draft.sessionsPerWeek * semanas : undefined,
@@ -150,7 +163,7 @@ export function buildPlan(draft: PlanDraft): PlannedCycle[] {
       level: 'meso',
       name: block.name.trim() || `Bloque ${bi + 1}`,
       startDate: cursor,
-      endDate: cursor + weeks * WEEK_MS - DAY_MS,
+      endDate: masDias(cursor, weeks * 7 - 1),
       orderIndex: bi + 1,
       goal: block.goal?.trim() || undefined,
       targetSessions: draft.sessionsPerWeek > 0 ? draft.sessionsPerWeek * weeks : undefined,
@@ -158,14 +171,14 @@ export function buildPlan(draft: PlanDraft): PlannedCycle[] {
 
     for (let w = 0; w < weeks; w++) {
       const esDescarga = block.deloadLast && w === weeks - 1;
-      const inicio = cursor + w * WEEK_MS;
+      const inicio = masDias(cursor, w * 7);
       out.push({
         key: `${mesoKey}-w${w}`,
         parentKey: mesoKey,
         level: 'micro',
         name: `Semana ${w + 1}${esDescarga ? ' · descarga' : ''}`,
         startDate: inicio,
-        endDate: inicio + 6 * DAY_MS,
+        endDate: masDias(inicio, 6),
         orderIndex: w + 1,
         isDeload: esDescarga || undefined,
         // En descarga se entrena menos: una sesión menos, nunca menos de dos.
@@ -177,7 +190,7 @@ export function buildPlan(draft: PlanDraft): PlannedCycle[] {
             : undefined,
       });
     }
-    cursor += weeks * WEEK_MS;
+    cursor = masDias(cursor, weeks * 7);
   });
 
   return out;
@@ -284,7 +297,7 @@ export function planCalendar(
 
   const desde = inicioDeLaSemana(root.startDate ?? root.createdAt);
   const finHijos = propios.reduce<number>((max, c) => Math.max(max, c.endDate ?? 0), 0);
-  const hasta = Math.max(root.endDate ?? finHijos, desde + 6 * DAY_MS);
+  const hasta = Math.max(root.endDate ?? finHijos, masDias(desde, 6));
   const semanas = weeksBetween(desde, hasta);
 
   const diasEntrenados = new Set(logs.map((l) => inicioDelDia(l.date)));
@@ -296,8 +309,8 @@ export function planCalendar(
 
   const filas: CalendarWeek[] = [];
   for (let i = 0; i < semanas; i++) {
-    const start = desde + i * WEEK_MS;
-    const end = start + 6 * DAY_MS;
+    const start = masDias(desde, i * 7);
+    const end = masDias(start, 6);
     const micro = micros.find((m) => inicioDeLaSemana(m.startDate!) === start) ?? null;
     // El bloque sale del padre del micro; si esa semana no tiene micro creado,
     // se busca por fechas para que la banda del bloque no se corte.
@@ -312,7 +325,7 @@ export function planCalendar(
     const days: boolean[] = [];
     let done = 0;
     for (let d = 0; d < 7; d++) {
-      const hit = diasEntrenados.has(start + d * DAY_MS);
+      const hit = diasEntrenados.has(masDias(start, d));
       days.push(hit);
       if (hit) done++;
     }

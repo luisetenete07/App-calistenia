@@ -1,6 +1,6 @@
 import { diaMes, inicioDelDia } from '../../../../lib/fechas';
 import { t, frase  } from '../../../../lib/idioma';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from '../../../../components/Texto';
@@ -115,6 +115,16 @@ export default function RoutineEditorScreen() {
   const [schedule, setSchedule] = useState<RoutineSchedule>('weekly');
   const [scheduleLabel, setScheduleLabel] = useState('Sensaciones');
   const [cycleStartDate, setCycleStartDate] = useState<number>(() => inicioDelDia(Date.now()));
+  /*
+   * La fecha con la que se abrió la rutina, para saber si el coach la ha
+   * CAMBIADO de verdad.
+   *
+   * Importa porque el alumno puede reiniciar su ciclo o fijar qué día es hoy, y
+   * lo que decida el último manda. Si cada vez que el coach guarda la rutina
+   * —para corregir una serie, por ejemplo— se anotara que acaba de reprogramar
+   * el ciclo, le estaría robando al alumno su día sin querer y sin enterarse.
+   */
+  const fechaAlAbrir = useRef<number | null>(null);
   // Series al día del modo grease the groove, como texto mientras se teclea.
   const [gtgSets, setGtgSets] = useState('');
   /**
@@ -165,6 +175,7 @@ export default function RoutineEditorScreen() {
         setSchedule(existing.schedule ?? 'weekly');
         if (existing.scheduleLabel) setScheduleLabel(flexLabel(existing.scheduleLabel));
         if (existing.cycleStartDate) setCycleStartDate(existing.cycleStartDate);
+        fechaAlAbrir.current = existing.cycleStartDate ?? null;
         if (existing.gtgSetsPerDay) setGtgSets(String(existing.gtgSetsPerDay));
       } else {
         setDays([{ id: nuevoId(), name: 'Día 1', exercises: [] }]);
@@ -264,6 +275,24 @@ export default function RoutineEditorScreen() {
   };
 
   // Asigna o quita el día de la semana (tocar el mismo chip lo desasigna).
+  /*
+   * Días que comparten el mismo día de la semana.
+   *
+   * Nada lo impide, y a veces se hace a propósito —dos sesiones el mismo día—,
+   * pero la app solo puede PROPONER una: la primera. La otra existe, se ve en la
+   * tira de días y se puede entrenar, pero nunca sale como "lo de hoy" ni en los
+   * avisos. Sin decirlo, el entrenador cree que ha programado dos y el alumno
+   * solo ve una, y ninguno de los dos tiene forma de enterarse.
+   */
+  const diasRepetidos = (() => {
+    const cuenta = new Map<number, number>();
+    for (const d of days) {
+      if (d.weekday === undefined) continue;
+      cuenta.set(d.weekday, (cuenta.get(d.weekday) ?? 0) + 1);
+    }
+    return new Set([...cuenta.entries()].filter(([, n]) => n > 1).map(([w]) => w));
+  })();
+
   const updateDayWeekday = (dayId: string, weekday: number | undefined) => {
     setDays((prev) => prev.map((d) => (d.id === dayId ? { ...d, weekday } : d)));
   };
@@ -633,7 +662,15 @@ export default function RoutineEditorScreen() {
     setName(t.name);
     setSchedule(t.schedule ?? 'weekly');
     if (t.scheduleLabel) setScheduleLabel(flexLabel(t.scheduleLabel));
-    if (t.cycleStartDate) setCycleStartDate(t.cycleStartDate);
+    /*
+     * La fecha de inicio del ciclo NO viene de la plantilla.
+     *
+     * Una plantilla es una estructura —los días y sus ejercicios—, no un
+     * calendario. Aplicando una guardada en marzo, el ciclo arrancaba en marzo:
+     * el alumno estrenaba plan y le tocaba un día cualquiera de la rueda, sin
+     * que nada en la pantalla explicara por qué. Se queda la fecha que hay
+     * puesta, que por defecto es hoy.
+     */
     setGtgSets(t.gtgSetsPerDay ? String(t.gtgSetsPerDay) : '');
     setDays(
       t.days.map((d) => ({
@@ -659,7 +696,6 @@ export default function RoutineEditorScreen() {
         trainerId: profile.uid,
         name: name.trim() || 'Plantilla',
         schedule,
-        cycleStartDate: schedule === 'cycle' ? cycleStartDate : undefined,
         scheduleLabel: schedule === 'flex' ? flexLabel(scheduleLabel) : undefined,
         gtgSetsPerDay: seriesAlDia(),
         days,
@@ -680,12 +716,16 @@ export default function RoutineEditorScreen() {
     if (!profile || !clientId) return;
     setSaving(true);
     try {
+      // Solo se anota "el coach ha reprogramado el ciclo" si la fecha CAMBIA.
+      const cambioLaFecha = schedule === 'cycle' && cycleStartDate !== fechaAlAbrir.current;
       const scheduleFields = {
         schedule,
         cycleStartDate: schedule === 'cycle' ? cycleStartDate : undefined,
+        cycleStartDateSetAt: cambioLaFecha ? Date.now() : undefined,
         scheduleLabel: schedule === 'flex' ? flexLabel(scheduleLabel) : undefined,
         gtgSetsPerDay: seriesAlDia(),
       };
+      if (cambioLaFecha) fechaAlAbrir.current = cycleStartDate;
       if (routineId) {
         await updateRoutine(routineId, { name, days, ...scheduleFields });
         await setActiveRoutine(clientId, routineId, profile.uid);
@@ -1133,6 +1173,12 @@ export default function RoutineEditorScreen() {
               <Text style={styles.optionalHint}>
                 Día de descanso: en el día de la semana elegido, el alumno verá “Descanso”, no
                 registra nada y no afecta a su racha.
+              </Text>
+            ) : null}
+            {day.weekday !== undefined && diasRepetidos.has(day.weekday) ? (
+              <Text style={styles.avisoRepetido}>
+                Otro día del plan cae en el mismo día de la semana. El alumno verá los dos y podrá
+                entrenar el que quiera, pero la app le propondrá el primero.
               </Text>
             ) : null}
           </View>
@@ -1761,6 +1807,7 @@ const styles = StyleSheet.create({
   dayTitle: { ...typography.h3, color: colors.text },
   daySummary: { ...typography.small, color: colors.textMuted, marginTop: 2 },
   weekdayRow: { marginTop: spacing.sm, marginBottom: spacing.sm },
+  avisoRepetido: { ...typography.small, color: colors.warning, marginTop: spacing.xs },
   weekdayHeadRow: {
     flexDirection: 'row',
     alignItems: 'center',

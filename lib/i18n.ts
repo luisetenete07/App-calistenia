@@ -601,6 +601,8 @@ export const EN: Record<string, string> = {
   'Día de la semana': 'Weekday',
   'Día de descanso: en el día de la semana elegido, el alumno verá “Descanso”, no registra nada y no afecta a su racha.':
     'Rest day: on the chosen weekday the student sees "Rest", logs nothing and their streak is unaffected.',
+  'Otro día del plan cae en el mismo día de la semana. El alumno verá los dos y podrá entrenar el que quiera, pero la app le propondrá el primero.':
+    'Another day of the plan falls on the same weekday. The student will see both and can train either, but the app will suggest the first one.',
   'Temporizador de intervalos (EMOM) este día': 'Interval timer (EMOM) on this day',
   '· goma': '· band',
   '· lastre': '· added weight',

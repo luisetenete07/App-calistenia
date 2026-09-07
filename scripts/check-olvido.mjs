@@ -183,7 +183,7 @@ console.log('\nCon el plan en pausa no se avisa de nada');
   const pausa = [
     { desde: hoy, hasta: hoy + DIA, porQuien: 'alumno', creadaEn: hoy },
   ];
-  const conPausa = diasPendientes(todosLosDias, false, ahora, 4, undefined, pausa);
+  const conPausa = diasPendientes(todosLosDias, false, ahora, 4, { pausas: pausa });
   comprueba('sin pausa se avisa de los cuatro días', sinPausa.length === 4);
   comprueba('con dos días de pausa quedan dos', conPausa.length === 2, String(conPausa.length));
   comprueba(
@@ -192,9 +192,9 @@ console.log('\nCon el plan en pausa no se avisa de nada');
   );
   comprueba(
     'una pausa ya terminada no quita nada',
-    diasPendientes(todosLosDias, false, ahora, 4, undefined, [
-      { desde: hoy - 5 * DIA, hasta: hoy - 3 * DIA, porQuien: 'coach', creadaEn: hoy },
-    ]).length === 4
+    diasPendientes(todosLosDias, false, ahora, 4, {
+      pausas: [{ desde: hoy - 5 * DIA, hasta: hoy - 3 * DIA, porQuien: 'coach', creadaEn: hoy }],
+    }).length === 4
   );
 }
 

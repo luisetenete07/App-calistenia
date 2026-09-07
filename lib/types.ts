@@ -267,6 +267,14 @@ export interface UserProfile {
    */
   cycleAnchors?: Record<string, number>;
   /**
+   * Cuándo se decidió cada ancla: routineId → timestamp. Es lo que permite
+   * saber qué manda cuando el mismo alumno toca su ciclo desde dos móviles, o
+   * cuando el coach reprograma el plan por su lado. Va en un mapa aparte para
+   * no cambiarle el tipo a `cycleAnchors`, que las versiones anteriores de la
+   * app leen como número.
+   */
+  cycleAnchorsSetAt?: Record<string, number>;
+  /**
    * Modo Sensaciones: días (timestamp a medianoche) que el alumno marcó como
    * descanso a propósito; no rompen la racha.
    */
@@ -708,6 +716,19 @@ export interface Routine {
   scheduleLabel?: string;
   /** Método REIN TENA: fecha (medianoche) en que el ciclo empieza por el Día 1. */
   cycleStartDate?: number;
+  /**
+   * Cuándo puso el coach esa fecha.
+   *
+   * Sin esto no hay forma de saber si la fecha del coach es más nueva que lo
+   * que el alumno haya decidido por su cuenta, y la app tenía que adivinarlo
+   * comparando las dos fechas: ganaba la más grande, así que un coach que
+   * programase el plan "para el lunes que viene" dejaba una fecha futura que
+   * tumbaba cualquier reinicio del alumno para siempre.
+   *
+   * Solo se escribe cuando la fecha CAMBIA. Guardar la rutina para corregir un
+   * ejercicio no puede robarle al alumno el día que él había fijado.
+   */
+  cycleStartDateSetAt?: number;
   /**
    * Solo en 'gtg': series que se buscan AL DÍA, repartidas. Sin valor, las de
    * por defecto (ver lib/gtg.ts).

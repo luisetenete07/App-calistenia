@@ -29,7 +29,8 @@ import { frase } from './idioma';
  * Si al terminar se borrara la pausa, esa suma volvería a cero y el ciclo daría
  * un salto hacia delante justo el día de volver — el fallo que la pausa venía a
  * evitar. Por eso quedan guardadas, y se podan solas al cabo de medio año
- * (`podarPausas`): para entonces ya no cambian ningún día de esta semana.
+ * (`podarPausas`): a esas alturas ya no caen dentro del ciclo en curso —solo
+ * cuentan las pausas posteriores a su Día 1—, así que quitarlas no mueve nada.
  */
 
 export interface PausaPlan {
@@ -85,31 +86,22 @@ export function diasDePausa(pausas: PausaPlan[] | undefined, hasta = Date.now())
   return salida;
 }
 
-/**
- * Cuántos días de pausa se han consumido ya, para congelar el ciclo.
+/*
+ * EL CONGELADO DEL CICLO VIVE EN lib/ciclo.ts
  *
- * Se cuentan los días de pausa que van del principio hasta HOY incluido. Un día
- * de pausa que todavía no ha llegado no ha congelado nada.
- */
-export function diasCongelados(pausas: PausaPlan[] | undefined, ahora = Date.now()): number {
-  return diasDePausa(pausas, ahora).length;
-}
-
-/**
- * El ancla del ciclo desplazada por las pausas.
+ * Aquí hubo un `anclaConPausas(ancla, pausas)` que movía el ancla hacia delante
+ * tantos días como pausa se llevara ACUMULADA DESDE SIEMPRE. Tenía dos fallos
+ * grandes:
  *
- * Mover el ancla hacia delante tantos días como se ha estado en pausa es lo
- * mismo que decirle al ciclo "esos días no han pasado". Se hace así, y no
- * restando dentro del cálculo del índice, porque el ancla ya se pasa a todas
- * las funciones que lo necesitan: no hay que tocar ninguna.
+ *  - Cobraba pausas que ya no venían al caso. Un alumno que reiniciaba su ciclo
+ *    hoy arrastraba los días de una pausa del mes pasado: pedía el Día 1 y le
+ *    salía el Día 6.
+ *  - Solo valía para HOY. La racha mira días del pasado y los avisos de entreno
+ *    días del futuro, y a esos días se les aplicaba el congelado de hoy.
+ *
+ * `indiceDelCiclo` lo hace bien: cuenta los días de pausa del tramo que va del
+ * ancla al día por el que se pregunta, y ni uno más.
  */
-export function anclaConPausas(
-  ancla: number,
-  pausas: PausaPlan[] | undefined,
-  ahora = Date.now()
-): number {
-  return ancla + diasCongelados(pausas, ahora) * DIA;
-}
 
 /**
  * Guarda una pausa nueva quitando las que se solapen.

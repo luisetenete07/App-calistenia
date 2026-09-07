@@ -28,7 +28,7 @@ import { getCyclesForClientSelf } from '../../lib/firestore/cycles';
 import { applyWeekPlan } from '../../lib/weekPlan';
 import { esfuerzoDePct, pctCombinado, textoIntensidad } from '../../lib/intensidad';
 import { RirPicker } from '../../components/RirPicker';
-import { anclaConPausas, pausaActiva } from '../../lib/pausa';
+import { diasDePausa, pausaActiva } from '../../lib/pausa';
 import { PressableScale } from '../../components/PressableScale';
 import { RegistrarOtroDia } from '../../components/RegistrarOtroDia';
 import { UltimoEntreno } from '../../components/UltimoEntreno';
@@ -50,7 +50,13 @@ import {
   sinLaUltimaSerie,
 } from '../../lib/gtg';
 import { PantallaGtg } from '../../components/PantallaGtg';
-import { getCycleAnchor, setCycleAnchorForIndex, setCycleAnchorToday } from '../../lib/cycleAnchor';
+import {
+  anclaDeLaCuenta,
+  getCycleAnchor,
+  setCycleAnchorForIndex,
+  setCycleAnchorToday,
+} from '../../lib/cycleAnchor';
+import { anclaQueManda, type AnclaDelAlumno } from '../../lib/ciclo';
 import { ultimoEntrenoDe } from '../../lib/ultimoEntreno';
 import {
   addFlexRestDay,
@@ -239,7 +245,7 @@ export default function WorkoutScreen() {
   // Índice del ejercicio con el campo de nota abierto (null = ninguno).
   const [noteOpenIndex, setNoteOpenIndex] = useState<number | null>(null);
   // Ancla local del ciclo (Método REIN TENA): el alumno puede reiniciar en Día 1.
-  const [cycleAnchor, setCycleAnchor] = useState<number | null>(null);
+  const [cycleAnchor, setCycleAnchor] = useState<AnclaDelAlumno | null>(null);
   // Elección del descanso opcional (Día 7 TENA): pendiente hasta que decide.
   const [optionalResolved, setOptionalResolved] = useState(false);
   const [restingToday, setRestingToday] = useState(false);
@@ -314,20 +320,26 @@ export default function WorkoutScreen() {
         const sync = await fetchSyncState(profile.uid);
         if (cancelled) return;
         remoteDraftRef.current = sync.activeSession ?? null;
-        // El ancla del ciclo es la más reciente entre la de la cuenta (otro
-        // dispositivo) y la local de este dispositivo.
-        const localAnchor = data ? await getCycleAnchor(data.id) : null;
-        const remoteAnchor = data ? sync.cycleAnchors[data.id] ?? null : null;
-        const anchor = Math.max(localAnchor ?? 0, remoteAnchor ?? 0) || null;
+        /*
+         * El ancla del ciclo es la que se DECIDIÓ más tarde, entre la de este
+         * dispositivo y la de la cuenta. Antes se cogía la fecha más grande, y
+         * como fijar "hoy es el Día 5" guardaba una fecha futura para ganar esa
+         * comparación, un reinicio hecho en otro móvil podía perder contra una
+         * elección de la semana pasada.
+         */
+        const anchor = anclaQueManda(
+          data ? await getCycleAnchor(data.id) : null,
+          data ? anclaDeLaCuenta({ cycleAnchors: sync.cycleAnchors, cycleAnchorsSetAt: sync.cycleAnchorsSetAt }, data.id) : null
+        );
         if (cancelled) return;
         setCycleAnchor(anchor);
         if (data && data.days.length > 0) {
           // Preselecciona el día que toca hoy. Prioridad: sesión en curso en
           // otro dispositivo → día ya entrenado hoy → día que toca → primero.
-          const session = resolveTodaySession(
-            data,
-            anchor ? anclaConPausas(anchor, profile.planPauses) : undefined
-          );
+          const session = resolveTodaySession(data, {
+            alumno: anchor,
+            pausas: profile.planPauses,
+          });
           const remoteFresh =
             sync.activeSession &&
             sync.activeSession.routineId === data.id &&
@@ -604,10 +616,10 @@ export default function WorkoutScreen() {
    * un día de baja apetece entrenar, ese entreno cuenta como cualquier otro.
    */
   const enPausa = pausaActiva(profile?.planPauses);
-  const todaySession = resolveTodaySession(
-    routine,
-    cycleAnchor ? anclaConPausas(cycleAnchor, profile?.planPauses) : undefined
-  );
+  const todaySession = resolveTodaySession(routine, {
+    alumno: cycleAnchor,
+    pausas: profile?.planPauses,
+  });
 
   /*
    * Sensaciones: alterna una rutina en la selección (guarda el orden de
@@ -810,10 +822,10 @@ export default function WorkoutScreen() {
   // Descanso opcional (Día 7 TENA): reinicia el ciclo entrenando el Día 1 hoy.
   const handleStartCycleToday = async () => {
     if (!routine || routine.days.length === 0) return;
-    const ts = await setCycleAnchorToday(routine.id);
-    setCycleAnchor(ts);
+    const decision = await setCycleAnchorToday(routine.id, profile?.planPauses);
+    setCycleAnchor(decision);
     // Sincroniza el día del ciclo con el resto de dispositivos de la cuenta.
-    if (profile) setCycleAnchorRemote(profile.uid, routine.id, ts);
+    if (profile) setCycleAnchorRemote(profile.uid, routine.id, decision.ancla, decision.decididaEn);
     setOptionalResolved(true);
     setRestingToday(false);
     const firstDay = routine.days[0];
@@ -826,9 +838,9 @@ export default function WorkoutScreen() {
   // Fija qué día del ciclo es HOY (plan desfasado o entreno pospuesto).
   const handleSetTodayIndex = async (index: number) => {
     if (!routine || routine.days.length === 0) return;
-    const ts = await setCycleAnchorForIndex(routine.id, index, routine.days.length);
-    setCycleAnchor(ts);
-    if (profile) setCycleAnchorRemote(profile.uid, routine.id, ts);
+    const decision = await setCycleAnchorForIndex(routine.id, index, profile?.planPauses);
+    setCycleAnchor(decision);
+    if (profile) setCycleAnchorRemote(profile.uid, routine.id, decision.ancla, decision.decididaEn);
     setOptionalResolved(true);
     setRestingToday(false);
     setSelectedDayId(routine.days[index].id);
@@ -1472,7 +1484,11 @@ export default function WorkoutScreen() {
         streak: currentStreak(freshLogs, {
           routine,
           cycleAnchor,
-          restDays: profile?.flexRestDays,
+          pausas: profile?.planPauses,
+          // Los días de pausa entran igual que en la pantalla de inicio. Sin
+          // ellos, la racha del resumen del entreno salía más corta que la de
+          // la portada, en la misma app y en el mismo minuto.
+          restDays: [...(profile?.flexRestDays ?? []), ...diasDePausa(profile?.planPauses)],
         }),
         newAchievements,
       });

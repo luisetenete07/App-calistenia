@@ -6,7 +6,7 @@ import { db } from './firebase';
 import { t } from './idioma';
 import { getUserProfile } from './firestore/users';
 import { DIAS_VISTA, diasPendientes, horasDeAviso, textoDeAviso, TOPE_AVISOS } from './olvido';
-import type { PausaPlan } from './pausa';
+import type { ContextoDelCiclo } from './schedule';
 import type { Routine } from './types';
 
 /**
@@ -174,8 +174,7 @@ export async function programarAvisosOlvido(
   routine: Routine | null,
   yaEntrenoHoy: boolean,
   desdeHora: number,
-  anchorOverride?: number,
-  pausas?: PausaPlan[],
+  ciclo?: ContextoDelCiclo,
   ahora = Date.now()
 ): Promise<number> {
   if (Platform.OS === 'web') return 0;
@@ -197,8 +196,7 @@ export async function programarAvisosOlvido(
       yaEntrenoHoy,
       ahora,
       DIAS_VISTA,
-      anchorOverride,
-      pausas
+      ciclo
     );
     let puestos = 0;
     for (const { dia, nombre } of pendientes) {

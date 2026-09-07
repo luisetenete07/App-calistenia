@@ -183,5 +183,66 @@ comprueba(
   soloPrimero.every((w) => !w.block || w.block.id.startsWith('c'))
 );
 
+console.log('\n5) El domingo en que cambia la hora no corre las fechas un día');
+{
+  /*
+   * LOS DOS DOMINGOS DEL AÑO QUE NO DURAN 24 HORAS
+   *
+   * Sumando 7 × 86.400.000 milisegundos, la semana que cruza el cambio de hora
+   * cae a las 23:00 del SÁBADO en vez de a las 00:00 del domingo. Una
+   * planificación de doce semanas cruza casi siempre uno de esos domingos, así
+   * que el plan decía "hasta el 25 de octubre" y en pantalla ponía el 24, y el
+   * último día del bloque se daba por terminado una hora después de empezar.
+   *
+   * Se comprueba en la zona horaria de España, que es donde vive el negocio:
+   * en UTC no hay cambio de hora y este fallo no se ve nunca.
+   */
+  const antes = process.env.TZ;
+  process.env.TZ = 'Europe/Madrid';
+  try {
+    // Arranca dos semanas antes del cambio de hora de octubre de 2026.
+    const plan = buildPlan({
+      name: 'Otoño',
+      startDate: new Date(2026, 9, 12, 10, 0, 0).getTime(),
+      sessionsPerWeek: 3,
+      blocks: [{ name: 'Bloque', weeks: 4, deloadLast: false }],
+    });
+    const aMedianoche = (t) => {
+      const d = new Date(t);
+      return d.getHours() === 0 && d.getMinutes() === 0;
+    };
+    comprueba(
+      'todas las fechas del plan caen a medianoche',
+      plan.every((c) => aMedianoche(c.startDate) && aMedianoche(c.endDate)),
+      plan.filter((c) => !aMedianoche(c.startDate) || !aMedianoche(c.endDate))
+        .map((c) => `${c.name}: ${new Date(c.startDate)} → ${new Date(c.endDate)}`)
+        .join(' | ')
+    );
+    const micros = plan.filter((c) => c.level === 'micro');
+    comprueba(
+      'y cada semana empieza en lunes',
+      micros.every((m) => new Date(m.startDate).getDay() === 1),
+      micros.map((m) => new Date(m.startDate).toDateString()).join(' | ')
+    );
+    comprueba(
+      'la última semana acaba el domingo que le toca',
+      new Date(micros[micros.length - 1].endDate).toDateString() === 'Sun Nov 08 2026',
+      new Date(micros[micros.length - 1].endDate).toDateString()
+    );
+
+    // Y el calendario que se pinta a partir de eso tiene las semanas justas.
+    const semanas = planCalendar(
+      { id: 'm', level: 'macro', startDate: plan[0].startDate, endDate: plan[0].endDate, createdAt: 0 },
+      [],
+      [],
+      plan[0].startDate
+    );
+    comprueba('el calendario saca las cuatro semanas', semanas.length === 4, String(semanas.length));
+  } finally {
+    if (antes === undefined) delete process.env.TZ;
+    else process.env.TZ = antes;
+  }
+}
+
 console.log(fallos === 0 ? '\nTodo correcto ✔\n' : `\n${fallos} fallo(s) ✖\n`);
 process.exit(fallos === 0 ? 0 : 1);

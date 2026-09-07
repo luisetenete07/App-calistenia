@@ -20,6 +20,7 @@
  *
  *   node --experimental-strip-types --import ./scripts/_ts-hook.mjs scripts/check-que-toca-hoy.mjs
  */
+import { readFileSync } from 'node:fs';
 import { resolveSessionFor } from '../lib/schedule.ts';
 import { masDias } from '../lib/fechas.ts';
 import { setIdioma } from '../lib/idioma.ts';
@@ -72,27 +73,74 @@ console.log('\nUn ciclo SIN fecha de inicio (el fallo que había)');
    * fecha. Antes esto se ignoraba por completo, y por eso "fijar el día de hoy"
    * no sobrevivía a cerrar la pantalla.
    */
-  const conAncla = resolveSessionFor(r, HOY, masDias(HOY, 2));
+  const conAncla = resolveSessionFor(r, HOY, { alumno: { ancla: masDias(HOY, -1), decididaEn: HOY } });
   ok('el alumno puede fijar qué día es hoy', conAncla.day?.name === 'Tirón', conAncla.day?.name);
   ok('con su etiqueta', conAncla.cycleLabel === 'Día 2 de 3', conAncla.cycleLabel);
 
   // Y que ese día siga puesto mañana, corrido uno: es lo que significa que el
   // ciclo "continúe" desde ahí y no que se quede clavado.
-  const manana = resolveSessionFor(r, masDias(HOY, 1), masDias(HOY, 2));
+  const manana = resolveSessionFor(r, masDias(HOY, 1), {
+    alumno: { ancla: masDias(HOY, -1), decididaEn: HOY },
+  });
   ok('y mañana el ciclo avanza solo', manana.isRest === true, manana.day?.name ?? 'descanso');
 }
 
-console.log('\nEl ancla más reciente manda');
+console.log('\nManda el último que lo decidió, no la fecha más grande');
 {
-  const r = ciclo({ cycleStartDate: masDias(HOY, -4) });
-  // El alumno reinició hoy: gana su ancla sobre la del coach, más antigua.
-  const s = resolveSessionFor(r, HOY, HOY);
+  /*
+   * ESTO ANTES SE DECIDÍA CON UN `Math.max` DE LAS DOS FECHAS, y de ahí salían
+   * los fallos que traían a los alumnos de cabeza. Ahora cada ancla lleva la
+   * fecha en que se decidió, y gana la más nueva. Ver lib/ciclo.ts.
+   */
+  const r = ciclo({ cycleStartDate: masDias(HOY, -4), cycleStartDateSetAt: masDias(HOY, -4) });
+  const s = resolveSessionFor(r, HOY, { alumno: { ancla: HOY, decididaEn: HOY } });
   ok('lo que hizo el alumno gana a lo viejo del coach', s.day?.name === 'Empuje', s.day?.name);
 
   // Y al revés: si el coach reprograma el ciclo DESPUÉS, gana él.
-  const r2 = ciclo({ cycleStartDate: HOY });
-  const s2 = resolveSessionFor(r2, HOY, masDias(HOY, -10));
+  const r2 = ciclo({ cycleStartDate: HOY, cycleStartDateSetAt: HOY });
+  const s2 = resolveSessionFor(r2, HOY, { alumno: { ancla: masDias(HOY, -10), decididaEn: masDias(HOY, -10) } });
   ok('y lo que reprograma el coach gana a lo viejo del alumno', s2.day?.name === 'Empuje', s2.day?.name);
+
+  /*
+   * EL FALLO Nº 3: una fecha de inicio FUTURA del coach.
+   *
+   * Un coach que el viernes deja el plan preparado "para el lunes" guardaba una
+   * fecha mayor que la de hoy. Con `Math.max` ganaba siempre, así que el alumno
+   * pulsaba "reiniciar el ciclo" y no pasaba absolutamente nada, ni ese día ni
+   * ninguno de los siguientes.
+   */
+  const rFutura = ciclo({ cycleStartDate: masDias(HOY, 3), cycleStartDateSetAt: masDias(HOY, -1) });
+  const s3 = resolveSessionFor(rFutura, HOY, { alumno: { ancla: HOY, decididaEn: HOY } });
+  ok('una fecha futura del coach no tumba el reinicio del alumno',
+    s3.day?.name === 'Empuje' && s3.cycleLabel === 'Día 1 de 3', s3.cycleLabel);
+
+  // Sin fecha de cuándo lo puso el coach (rutinas de versiones anteriores),
+  // gana el alumno: lo suyo es siempre un gesto reciente dentro de la app.
+  const rVieja = ciclo({ cycleStartDate: masDias(HOY, 3) });
+  ok('y sin saber cuándo lo puso el coach, gana el alumno',
+    resolveSessionFor(rVieja, HOY, { alumno: { ancla: HOY, decididaEn: HOY } }).cycleLabel === 'Día 1 de 3');
+}
+
+console.log('\nY las pausas congelan el ciclo el día que toque');
+{
+  const r = ciclo({ cycleStartDate: masDias(HOY, -4) });
+  const pausas = [
+    { desde: masDias(HOY, -3), hasta: masDias(HOY, -2), porQuien: 'alumno', creadaEn: HOY },
+  ];
+  // Sin pausa el jueves sería el día 2 (4 % 3); con dos días congelados, el 3.
+  ok('dos días de pausa retrasan el ciclo dos días',
+    resolveSessionFor(r, HOY, { pausas }).cycleLabel === 'Día 3 de 3',
+    resolveSessionFor(r, HOY, { pausas }).cycleLabel);
+
+  /*
+   * EL FALLO Nº 1: una pausa vieja seguía moviendo un ciclo que empezó DESPUÉS
+   * de ella. El alumno pulsaba "reiniciar" y le salía un día cualquiera.
+   */
+  const reinicio = resolveSessionFor(r, HOY, {
+    alumno: { ancla: HOY, decididaEn: HOY },
+    pausas: [{ desde: masDias(HOY, -8), hasta: masDias(HOY, -7), porQuien: 'alumno', creadaEn: HOY }],
+  });
+  ok('una pausa anterior al reinicio no lo mueve', reinicio.cycleLabel === 'Día 1 de 3', reinicio.cycleLabel);
 }
 
 console.log('\nLos otros modos siguen igual');
@@ -120,6 +168,27 @@ console.log('\nLos otros modos siguen igual');
 
   ok('sin rutina no se inventa nada', resolveSessionFor(null, HOY).day === null);
   ok('ni con una rutina vacía', resolveSessionFor({ id: 'x', schedule: 'cycle', days: [] }, HOY).day === null);
+
+  /*
+   * DOS DÍAS EN EL MISMO DÍA DE LA SEMANA
+   *
+   * Nada lo impide, y a veces se hace a propósito. Pero la app solo puede
+   * PROPONER uno —el primero—, así que el segundo existe y se puede entrenar
+   * desde la tira de días, pero nunca sale como "lo de hoy" ni en los avisos.
+   * Es una trampa silenciosa: el entrenador cree que ha programado dos sesiones
+   * y el alumno solo ve una. Se avisa en el editor, y esto vigila que el aviso
+   * siga estando.
+   */
+  const dosLunes = {
+    id: 'r5',
+    schedule: 'weekly',
+    days: [{ id: 'a', name: 'Empuje', weekday: 0 }, { id: 'b', name: 'Core', weekday: 0 }],
+  };
+  ok('con dos días en el mismo día de la semana se propone el primero',
+    resolveSessionFor(dosLunes, lunes).day?.name === 'Empuje');
+  const editor = readFileSync(new URL('../app/(trainer)/clients/[id]/routine.tsx', import.meta.url), 'utf8');
+  ok('y el editor se lo dice al entrenador',
+    /diasRepetidos\.has\(day\.weekday\)/.test(editor) && /Otro día del plan cae en el mismo día/.test(editor));
 }
 
 console.log(fallos === 0 ? '\nTodo correcto ✔' : `\n${fallos} fallo(s)`);

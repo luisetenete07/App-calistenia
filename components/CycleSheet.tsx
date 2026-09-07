@@ -12,7 +12,7 @@ import { getWorkoutLogsForClient } from '../lib/firestore/workoutLogs';
 import { ObjetivosDeCiclo } from './ObjetivosDeCiclo';
 import { Segmented } from './Segmented';
 import { Sheet } from './Sheet';
-import { fechaLegible } from '../lib/fechas';
+import { fechaLegible, masDias } from '../lib/fechas';
 import { colors, fonts, radius, spacing, typography } from '../lib/theme';
 import {
   CYCLE_DEFAULT_WEEKS,
@@ -131,7 +131,12 @@ export function CycleSheet({ visible, trainerId, clientId, cycle, onClose, onSav
     if (l !== 'micro') setIsDeload(false);
   };
 
-  const endDate = open ? undefined : startDate + (weeks * 7 - 1) * DAY_MS;
+  /*
+   * Con `masDias` y no sumando milisegundos: el domingo que cambia la hora dura
+   * 23 o 25, y un bloque que lo cruce acababa a las 23:00 del día anterior. En
+   * pantalla se leía un día menos del que el entrenador había puesto.
+   */
+  const endDate = open ? undefined : masDias(startDate, weeks * 7 - 1);
 
   const handleSave = async () => {
     if (!name.trim()) {

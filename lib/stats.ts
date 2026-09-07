@@ -9,6 +9,8 @@ import {
   type WorkoutLog,
 } from './types';
 import { diasEntre, inicioDeLaSemana, inicioDelDia, masDias, mesLargo } from './fechas';
+import { anclaEfectiva, indiceDelCiclo, type AnclaDelAlumno } from './ciclo';
+import type { PausaPlan } from './pausa';
 import { frase } from './idioma';
 
 /**
@@ -92,9 +94,17 @@ export interface StreakPlan {
   routine?: {
     schedule?: RoutineSchedule;
     cycleStartDate?: number;
+    cycleStartDateSetAt?: number;
     days: { weekday?: number; isRest?: boolean }[];
   } | null;
-  cycleAnchor?: number | null;
+  /** Lo que el alumno decidió sobre su ciclo, con la fecha en que lo decidió. */
+  cycleAnchor?: AnclaDelAlumno | null;
+  /**
+   * Pausas del plan. Van aparte de `restDays` aunque sus días también estén
+   * ahí: en `restDays` sirven para que la pausa no rompa la racha, y aquí para
+   * saber qué día del ciclo tocaba en cada día que se mira hacia atrás.
+   */
+  pausas?: PausaPlan[];
   /** Días (a medianoche) marcados como descanso en modo Sensaciones. */
   restDays?: number[];
 }
@@ -122,9 +132,16 @@ export function currentStreak(logs: WorkoutLog[], plan?: StreakPlan, floorTs?: n
   // ¿Tocaba entrenar el día d? true/false según el plan; null = plan desconocido.
   const scheduled = (d: number): boolean | null => {
     if (!r || r.days.length === 0) return null;
-    if (r.schedule === 'cycle' && (r.cycleStartDate || plan?.cycleAnchor)) {
-      const anchor = Math.max(r.cycleStartDate ?? 0, plan?.cycleAnchor ?? 0);
-      const idx = cycleDayIndexForStreak(anchor, r.days.length, d);
+    if (r.schedule === 'cycle' && (r.cycleStartDate || plan?.cycleAnchor?.ancla)) {
+      /*
+       * El día del ciclo se pide PARA EL DÍA `d`, que aquí siempre es del
+       * pasado. Antes se calculaba con el ancla ya desplazada por la pausa
+       * acumulada HOY: en los días anteriores a la pausa esa cuenta sobraba, y
+       * la racha daba por descanso días en los que sí tocaba entrenar (o al
+       * revés). Con la racha, equivocarse es romperla sin motivo.
+       */
+      const anchor = anclaEfectiva(r, plan?.cycleAnchor);
+      const idx = indiceDelCiclo(anchor, r.days.length, d, plan?.pausas);
       const day = r.days[idx];
       return day ? !day.isRest : null;
     }
@@ -159,12 +176,6 @@ export function currentStreak(logs: WorkoutLog[], plan?: StreakPlan, floorTs?: n
     if (unknownGap >= 2) break;
   }
   return streak;
-}
-
-/** cycleDayIndex local (evita dependencia circular con lib/schedule). */
-function cycleDayIndexForStreak(anchor: number, len: number, now: number): number {
-  const elapsed = diasEntre(anchor, now);
-  return ((elapsed % len) + len) % len;
 }
 
 /**

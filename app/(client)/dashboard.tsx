@@ -46,8 +46,9 @@ import { notifyUser } from '../../lib/notifications';
 import { showToast } from '../../components/Toast';
 import { activeCycle, computeCycleStats, cycleWeekInfo } from '../../lib/cycleStats';
 import { nombreDeCiclo, planCalendar, planSummary } from '../../lib/cyclePlan';
-import { getCycleAnchor } from '../../lib/cycleAnchor';
-import { anclaConPausas, diasDePausa, diasQueQuedan, pausaActiva } from '../../lib/pausa';
+import { anclaDelAlumno } from '../../lib/cycleAnchor';
+import type { AnclaDelAlumno } from '../../lib/ciclo';
+import { diasDePausa, diasQueQuedan, pausaActiva } from '../../lib/pausa';
 import { cancelarAvisosOlvido, programarAvisosOlvido } from '../../lib/notifications';
 import { fonts, colors, gradients, radius, shadows, spacing, typography } from '../../lib/theme';
 import {
@@ -70,7 +71,7 @@ interface ClientDashData {
   workoutLogs: WorkoutLog[];
   habits: Habit[];
   habitLogs: HabitLog[];
-  cycleAnchor: number | null;
+  cycleAnchor: AnclaDelAlumno | null;
 }
 
 export default function ClientDashboard() {
@@ -85,7 +86,7 @@ export default function ClientDashboard() {
   const [workoutLogs, setWorkoutLogs] = useState<WorkoutLog[]>(cached?.workoutLogs ?? []);
   const [habits, setHabits] = useState<Habit[]>(cached?.habits ?? []);
   const [habitLogs, setHabitLogs] = useState<HabitLog[]>(cached?.habitLogs ?? []);
-  const [cycleAnchor, setCycleAnchor] = useState<number | null>(cached?.cycleAnchor ?? null);
+  const [cycleAnchor, setCycleAnchor] = useState<AnclaDelAlumno | null>(cached?.cycleAnchor ?? null);
   const [loading, setLoading] = useState(cached === undefined);
   const [refreshing, setRefreshing] = useState(false);
   // Ciclo en curso (si el coach usa planificación). Best-effort: si las reglas
@@ -107,7 +108,7 @@ export default function ClientDashboard() {
           getHabitsForClient(profile.uid),
           getHabitLogsForClient(profile.uid),
         ]);
-      const anchor = routineData ? await getCycleAnchor(routineData.id) : null;
+      const anchor = routineData ? await anclaDelAlumno(routineData.id, profile) : null;
       if (isActive && !isActive()) return;
       setCycleAnchor(anchor);
       setRoutine(routineData);
@@ -139,13 +140,10 @@ export default function ClientDashboard() {
        */
       if (profile.missedWorkoutRemindersEnabled) {
         const entrenoHoy = workoutData.some((l) => esHoy(l.date));
-        programarAvisosOlvido(
-          routineData,
-          entrenoHoy,
-          profile.reminderHour ?? 18,
-          anchor ? anclaConPausas(anchor, profile.planPauses) : undefined,
-          profile.planPauses
-        ).catch(() => {});
+        programarAvisosOlvido(routineData, entrenoHoy, profile.reminderHour ?? 18, {
+          alumno: anchor,
+          pausas: profile.planPauses,
+        }).catch(() => {});
       } else {
         cancelarAvisosOlvido().catch(() => {});
       }
@@ -201,14 +199,15 @@ export default function ClientDashboard() {
    *  - Lo que se propone hoy: durante la pausa, nada.
    */
   const enPausa = pausaActiva(profile?.planPauses);
-  const anclaPausada = anclaConPausas(cycleAnchor ?? 0, profile?.planPauses);
+  const ciclo = { alumno: cycleAnchor, pausas: profile?.planPauses };
   const streak = currentStreak(workoutLogs, {
     routine,
-    cycleAnchor: cycleAnchor ? anclaPausada : null,
+    cycleAnchor,
+    pausas: profile?.planPauses,
     restDays: [...(profile?.flexRestDays ?? []), ...diasDePausa(profile?.planPauses)],
   });
   // Qué toca hoy según el modo (semanal o Método REIN TENA por ciclo).
-  const sesionDelPlan = resolveTodaySession(routine, cycleAnchor ? anclaPausada : undefined);
+  const sesionDelPlan = resolveTodaySession(routine, ciclo);
   const todaySession = enPausa
     ? { day: null, isRest: false, optionalRest: false }
     : sesionDelPlan;

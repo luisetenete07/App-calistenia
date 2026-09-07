@@ -1,7 +1,7 @@
 import { inicioDelDia } from './fechas';
 import { frase } from './idioma';
 import { cubre, type PausaPlan } from './pausa';
-import { resolveSessionFor } from './schedule';
+import { resolveSessionFor, type ContextoDelCiclo } from './schedule';
 import type { Routine } from './types';
 
 /**
@@ -92,8 +92,7 @@ export function diasPendientes(
   yaEntrenoHoy: boolean,
   ahora = Date.now(),
   dias = DIAS_VISTA,
-  anchorOverride?: number,
-  pausas?: PausaPlan[]
+  ciclo?: ContextoDelCiclo
 ): DiaPendiente[] {
   if (!routine) return [];
   const salida: DiaPendiente[] = [];
@@ -101,8 +100,14 @@ export function diasPendientes(
   for (let i = 0; i < dias; i++) {
     const dia = inicioDelDia(hoy + i * 24 * 60 * 60 * 1000 + 60 * 60 * 1000);
     if (i === 0 && yaEntrenoHoy) continue;
-    if ((pausas ?? []).some((p) => cubre(p, dia))) continue;
-    const sesion = resolveSessionFor(routine, dia + 12 * 60 * 60 * 1000, anchorOverride);
+    if ((ciclo?.pausas ?? []).some((p) => cubre(p, dia))) continue;
+    /*
+     * El día se resuelve PARA ESE DÍA, con las pausas incluidas. Antes se le
+     * pasaba un ancla ya desplazada por la pausa acumulada HOY, y para un día
+     * de dentro de tres el desplazamiento era otro: el aviso anunciaba un día
+     * del ciclo distinto del que el alumno se iba a encontrar al abrir la app.
+     */
+    const sesion = resolveSessionFor(routine, dia + 12 * 60 * 60 * 1000, ciclo);
     // Sin día programado no hay nada que se le pueda olvidar: ni descanso, ni
     // "a sensaciones" (ahí elige él si entrena y qué), ni un hueco del ciclo.
     if (!sesion.day || sesion.isRest) continue;

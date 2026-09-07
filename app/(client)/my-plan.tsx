@@ -1,6 +1,6 @@
 import { t, frase } from '../../lib/idioma';
 import { diaMes, inicioDelDia } from '../../lib/fechas';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { Text } from '../../components/Texto';
@@ -132,6 +132,12 @@ export default function MyPlanScreen() {
   const [schedule, setSchedule] = useState<RoutineSchedule>('weekly');
   const [scheduleLabel, setScheduleLabel] = useState('Sensaciones');
   const [cycleStartDate, setCycleStartDate] = useState<number>(() => inicioDelDia(Date.now()));
+  /*
+   * La fecha con la que se abrió el plan. Solo si CAMBIA se anota que el ciclo
+   * se ha reprogramado: guardar el plan para tocar una serie no puede tumbar el
+   * día que el propio atleta hubiera fijado desde la pantalla de entreno.
+   */
+  const fechaAlAbrir = useRef<number | null>(null);
   // Series al día del modo grease the groove, como texto mientras se teclea.
   const [gtgSets, setGtgSets] = useState('');
   /** Las series al día en número; vacío o disparatado deja las de por defecto. */
@@ -160,6 +166,7 @@ export default function MyPlanScreen() {
         setSchedule(r.schedule ?? 'weekly');
         if (r.scheduleLabel) setScheduleLabel(flexLabel(r.scheduleLabel));
         if (r.cycleStartDate) setCycleStartDate(r.cycleStartDate);
+        fechaAlAbrir.current = r.cycleStartDate ?? null;
         if (r.gtgSetsPerDay) setGtgSets(String(r.gtgSetsPerDay));
       } else {
         setRoutineId(null);
@@ -232,12 +239,15 @@ export default function MyPlanScreen() {
       showToast('Añade al menos un día con ejercicios');
       return;
     }
+    const cambioLaFecha = schedule === 'cycle' && cycleStartDate !== fechaAlAbrir.current;
     const scheduleFields = {
       schedule,
       cycleStartDate: schedule === 'cycle' ? cycleStartDate : undefined,
+      cycleStartDateSetAt: cambioLaFecha ? Date.now() : undefined,
       scheduleLabel: schedule === 'flex' ? flexLabel(scheduleLabel) : undefined,
       gtgSetsPerDay: seriesAlDia(),
     };
+    if (cambioLaFecha) fechaAlAbrir.current = cycleStartDate;
     setSaving(true);
     try {
       if (routineId) {

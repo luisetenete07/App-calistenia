@@ -10,10 +10,8 @@
  *   node --experimental-strip-types --import ./scripts/_ts-hook.mjs scripts/check-pausa.mjs
  */
 import {
-  anclaConPausas,
   conPausaNueva,
   cubre,
-  diasCongelados,
   diasDePausa,
   diasQueQuedan,
   duracionEnDias,
@@ -22,7 +20,7 @@ import {
   terminadaHoy,
   textoRango,
 } from '../lib/pausa.ts';
-import { cycleDayIndex } from '../lib/schedule.ts';
+import { anclaParaIndice, diasCongeladosEntre, indiceDelCiclo } from '../lib/ciclo.ts';
 import { setIdioma } from '../lib/idioma.ts';
 
 // Fuera de la app el idioma sale del sistema, y el de este entorno es inglés:
@@ -92,7 +90,7 @@ console.log('\nEl congelado del ciclo (la parte que hay que clavar)');
 {
   // Ciclo de 3 días que arranca el lunes: L=día1, M=día2, X=día3, J=día1...
   const CICLO = 3;
-  const sinPausa = (n) => cycleDayIndex(LUNES, CICLO, dia(n));
+  const sinPausa = (n) => indiceDelCiclo(LUNES, CICLO, dia(n));
   comprueba('sin pausa, el lunes es el día 1', sinPausa(0) === 0);
   comprueba('sin pausa, el jueves vuelve al día 1', sinPausa(3) === 0);
 
@@ -103,7 +101,7 @@ console.log('\nEl congelado del ciclo (la parte que hay que clavar)');
   // sesión ninguna, dice "en pausa". Lo que tiene que estar clavado es el día
   // de VOLVER y todos los siguientes, que es lo que aquí se comprueba.
   const ps = [pausa(0, 2)];
-  const con = (n) => cycleDayIndex(anclaConPausas(LUNES, ps, dia(n)), CICLO, dia(n));
+  const con = (n) => indiceDelCiclo(LUNES, CICLO, dia(n), ps);
   comprueba('durante la pausa hay pausa activa, no día', pausaActiva(ps, dia(1)) !== null);
   comprueba('el jueves retoma el día 1, el que se dejó', con(3) === 0, String(con(3)));
   comprueba('el viernes ya es el día 2', con(4) === 1, String(con(4)));
@@ -114,22 +112,49 @@ console.log('\nEl congelado del ciclo (la parte que hay que clavar)');
     `${con(10)}`
   );
 
-  comprueba('días congelados el jueves: los 3 de la pausa', diasCongelados(ps, dia(3)) === 3);
-  comprueba('y no crecen después', diasCongelados(ps, dia(30)) === 3);
+  comprueba('días congelados el jueves: los 3 de la pausa', diasCongeladosEntre(LUNES, ps, dia(3)) === 3);
+  comprueba('y no crecen después', diasCongeladosEntre(LUNES, ps, dia(30)) === 3);
+
+  /*
+   * Y LA PAUSA NO SE COBRA DOS VECES.
+   *
+   * Este era el fallo que traía a los alumnos de cabeza. El congelado se
+   * calculaba sumando TODA la pausa acumulada desde siempre, así que quien
+   * hubiera tenido tres días de baja arrastraba esos tres días para siempre:
+   * pulsaba "reiniciar el ciclo", pedía el Día 1 y le salía el Día 3.
+   *
+   * Una pausa anterior al arranque del ciclo no puede moverlo.
+   */
+  const anclaNueva = anclaParaIndice(0, ps, dia(10));
+  comprueba('reiniciar después de una pausa deja el Día 1', indiceDelCiclo(anclaNueva, CICLO, dia(10), ps) === 0);
+  comprueba('y al día siguiente el Día 2', indiceDelCiclo(anclaNueva, CICLO, dia(11), ps) === 1);
+
+  // Y fijar un día concreto cuenta los días de pausa que hay por el camino.
+  const enPausa = [pausa(9, 9)];
+  const fijado = anclaParaIndice(2, enPausa, dia(10));
+  comprueba('fijar "hoy es el día 3" sale el día 3', indiceDelCiclo(fijado, CICLO, dia(10), enPausa) === 2);
+
+  // Reiniciar ESTANDO de baja: hoy es el Día 1 igualmente.
+  const hoyDeBaja = [pausa(8, 10)];
+  const desdeLaBaja = anclaParaIndice(0, hoyDeBaja, dia(10));
+  comprueba('reiniciar estando de baja deja el Día 1', indiceDelCiclo(desdeLaBaja, CICLO, dia(10), hoyDeBaja) === 0);
+  // Y a partir de ahí el ciclo corre normal: quien dice "hoy es el Día 1"
+  // está eligiendo el día de hoy, esté de baja o no.
+  comprueba('y mañana el Día 2', indiceDelCiclo(desdeLaBaja, CICLO, dia(11), hoyDeBaja) === 1);
 }
 
 console.log('\nDos pausas seguidas se suman, y las solapadas no');
 {
   const dos = conPausaNueva([pausa(0, 1)], pausa(5, 6));
   comprueba('dos pausas separadas conviven', dos.length === 2);
-  comprueba('congelan 4 días en total', diasCongelados(dos, dia(20)) === 4);
+  comprueba('congelan 4 días en total', diasCongeladosEntre(dia(0), dos, dia(20)) === 4);
 
   // Una pausa nueva que pisa a otra la sustituye: si no, esos días
   // congelarían el ciclo dos veces y el alumno repetiría entrenos.
   const solapada = conPausaNueva([pausa(0, 3)], pausa(2, 5));
   comprueba('la que se solapa desaparece', solapada.length === 1);
   comprueba('queda la nueva', solapada[0].desde === dia(2) && solapada[0].hasta === dia(5));
-  comprueba('congela 4 días, no 8', diasCongelados(solapada, dia(20)) === 4);
+  comprueba('congela 4 días, no 8', diasCongeladosEntre(dia(0), solapada, dia(20)) === 4);
   comprueba('quedan ordenadas por fecha', dos[0].desde < dos[1].desde);
 }
 
@@ -140,13 +165,13 @@ console.log('\nTerminarla antes de tiempo');
   const cortada = terminadaHoy([pausa(0, 4)], dia(2));
   comprueba('no se borra, se recorta', cortada.length === 1);
   comprueba('acaba ayer (martes)', cortada[0].hasta === dia(1), String(cortada[0].hasta));
-  comprueba('congela 2 días, los ya vividos', diasCongelados(cortada, dia(10)) === 2);
+  comprueba('congela 2 días, los ya vividos', diasCongeladosEntre(dia(0), cortada, dia(10)) === 2);
   comprueba('y hoy ya no hay pausa', pausaActiva(cortada, dia(2)) === null);
 
   // Cortarla el mismo día que empieza sí la borra: no llegó a congelar nada.
   const mismoDia = terminadaHoy([pausa(0, 4)], dia(0));
   comprueba('cortada el primer día, desaparece', mismoDia.length === 0);
-  comprueba('y no congela nada', diasCongelados(mismoDia, dia(10)) === 0);
+  comprueba('y no congela nada', diasCongeladosEntre(dia(0), mismoDia, dia(10)) === 0);
 }
 
 console.log('\nLas viejas se podan');

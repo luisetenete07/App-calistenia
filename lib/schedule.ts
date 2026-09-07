@@ -1,5 +1,6 @@
-import { diasEntre } from './fechas';
+import { anclaEfectiva, indiceDelCiclo, type AnclaDelAlumno } from './ciclo';
 import { frase } from './idioma';
+import type { PausaPlan } from './pausa';
 import { weekdayOf, type Routine, type RoutineDay } from './types';
 
 /** Nombres heredados del modo "Sensaciones" que ya no queremos mostrar. */
@@ -47,13 +48,18 @@ export interface TodaySession {
 }
 
 /**
- * Índice del día del ciclo que corresponde a `now`, dado el ancla del ciclo
- * (Día 1) y la longitud del ciclo. Rota de forma constante e infinita.
+ * Lo que hace falta saber del alumno para situar su ciclo.
+ *
+ * Va junto a propósito: el ancla y las pausas SIEMPRE se usan a la vez, y
+ * cuando eran dos parámetros sueltos hubo pantallas que pasaban una y se
+ * olvidaban de la otra. El día que sale de olvidarse es un día del plan que no
+ * toca, y eso el alumno lo ve y no lo entiende.
  */
-export function cycleDayIndex(cycleStartDate: number, cycleLength: number, now = Date.now()): number {
-  if (cycleLength <= 0) return 0;
-  const elapsed = diasEntre(cycleStartDate, now);
-  return ((elapsed % cycleLength) + cycleLength) % cycleLength;
+export interface ContextoDelCiclo {
+  /** Lo que el alumno decidió (reinicio, o "hoy es el Día N"), con su fecha. */
+  alumno?: AnclaDelAlumno | null;
+  /** Pausas del plan: sus días congelan el ciclo. */
+  pausas?: PausaPlan[];
 }
 
 /**
@@ -64,9 +70,9 @@ export function cycleDayIndex(cycleStartDate: number, cycleLength: number, now =
  */
 export function resolveTodaySession(
   routine: Routine | null,
-  anchorOverride?: number
+  ciclo?: ContextoDelCiclo
 ): TodaySession {
-  return resolveSessionFor(routine, Date.now(), anchorOverride);
+  return resolveSessionFor(routine, Date.now(), ciclo);
 }
 
 /**
@@ -82,7 +88,7 @@ export function resolveTodaySession(
 export function resolveSessionFor(
   routine: Routine | null,
   when: number,
-  anchorOverride?: number
+  ciclo?: ContextoDelCiclo
 ): TodaySession {
   if (!routine || routine.days.length === 0) {
     return { day: null, isRest: false, optionalRest: false };
@@ -104,10 +110,12 @@ export function resolveSessionFor(
 
   if (routine.schedule === 'cycle') {
     /*
-     * EL ANCLA MÁS RECIENTE MANDA
+     * QUIÉN MANDA: EL ÚLTIMO QUE LO DECIDIÓ
      *
-     * Si el alumno reinició su ciclo o fijó qué día es hoy (`anchorOverride`),
-     * o el coach lo reprogramó (`cycleStartDate`), gana la fecha más nueva.
+     * El alumno puede reiniciar su ciclo o fijar qué día es hoy sin tocar la
+     * rutina, que es del coach; el coach puede reprogramar la fecha de inicio.
+     * Gana quien lo haya hecho más tarde. El porqué —y los cuatro fallos que
+     * salían de decidirlo por "la fecha más grande"— está en lib/ciclo.ts.
      *
      * OJO CON EL CICLO SIN FECHA DE INICIO
      *
@@ -123,8 +131,9 @@ export function resolveSessionFor(
      * ninguna, el ciclo empieza hoy por el Día 1, que es lo que uno espera de
      * un plan recién puesto.
      */
-    const anchor = Math.max(routine.cycleStartDate ?? 0, anchorOverride ?? 0);
-    const idx = anchor > 0 ? cycleDayIndex(anchor, routine.days.length, when) : 0;
+    const anchor = anclaEfectiva(routine, ciclo?.alumno);
+    const idx =
+      anchor > 0 ? indiceDelCiclo(anchor, routine.days.length, when, ciclo?.pausas) : 0;
     const day = routine.days[idx] ?? null;
     return {
       day: day && !day.isRest ? day : null,
