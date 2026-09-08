@@ -141,6 +141,14 @@ console.log('\nLa ficha de nutrición del alumno');
    */
   ok('el título de la libreta es corto',
     /placeholder="Ej\. Recetas de desayuno"/.test(lee('app/(trainer)/clients/meal-books.tsx')));
+
+  /*
+   * Y el del ejercicio de la rutina diaria: "Ejercicio (p. ej. Pino contra
+   * pared)". Mismo caso y misma cura: la palabra "Ejercicio" la dice ya la
+   * lista que hay justo encima del campo.
+   */
+  ok('el ejemplo del ejercicio diario es corto',
+    /placeholder="Ej\. Pino contra pared"/.test(lee('components/RutinaDiariaEditor.tsx')));
 }
 
 console.log(fallos === 0 ? '\nTodo correcto ✔' : `\n${fallos} fallo(s)`);

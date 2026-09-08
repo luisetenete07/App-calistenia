@@ -1438,7 +1438,7 @@ export const EN: Record<string, string> = {
   'Activa: la ve en su Entreno': 'On: they see it in their Training',
   'Activa: la ves en tu Entreno': 'On: you see it in your Training',
   'Apagada. Los ejercicios se guardan igual.': 'Off. The exercises are kept anyway.',
-  'Ejercicio (p. ej. Pino contra pared)': 'Exercise (e.g. Wall handstand)',
+  'Ej. Pino contra pared': 'E.g. Wall handstand',
   'Objetivo (p. ej. 3 series de 30 s)': 'Target (e.g. 3 sets of 30 s)',
   'Hecha. Mañana otra vez.': 'Done. Again tomorrow.',
   '{0} cosas cortas, cuando puedas.': '{0} short things, whenever you can.',

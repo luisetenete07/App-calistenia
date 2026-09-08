@@ -347,7 +347,13 @@ export function RutinaDiariaEditor({
               style={styles.campoEjercicio}
               value={nuevoNombre}
               onChangeText={setNuevoNombre}
-              placeholder="Ejercicio (p. ej. Pino contra pared)"
+              /*
+               * Corto a propósito: "Ejercicio (p. ej. Pino contra pared)" no
+               * cabía en un móvil de 320 px y se leía a medias, sin cerrar el
+               * paréntesis. La palabra "Ejercicio" sobra: el campo está debajo
+               * de la lista de ejercicios y encima del botón de añadir.
+               */
+              placeholder="Ej. Pino contra pared"
               placeholderTextColor={colors.textFaint}
               returnKeyType="next"
             />
