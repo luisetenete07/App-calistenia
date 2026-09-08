@@ -66,10 +66,24 @@ export function VisorDeVideo({
 
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onCerrar}>
-      {/* El fondo cierra al tocarlo. En un vídeo a casi toda la pantalla, el
-          gesto natural para salir es tocar fuera; sin esto habría que buscar
-          la aspa con el dedo. */}
-      <Pressable style={styles.fondo} onPress={onCerrar}>
+      <View style={styles.fondo}>
+        {/*
+         * EL FONDO CIERRA AL TOCARLO, Y VA DETRÁS, NO ALREDEDOR.
+         *
+         * Antes era un `Pressable` que envolvía TODO, con otro por dentro
+         * rodeando el vídeo para que tocarlo no cerrara. O sea, que el
+         * reproductor colgaba de dos capas que se disputan cada toque. En el
+         * ordenador da igual —el `stopPropagation` del navegador corta la
+         * cadena—, pero en el móvil ese método ni siquiera existe: quien
+         * decide quién se queda el toque es el sistema de responders de React
+         * Native, y ahí un WebView metido debajo de dos pulsables es la receta
+         * conocida de "el vídeo se ve pero el play no responde".
+         *
+         * Puesto detrás como una capa suelta, el gesto de cerrar sigue igual y
+         * ya no hay nada por encima del reproductor que le pueda quitar el
+         * toque.
+         */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={onCerrar} />
         <View style={styles.barra}>
           <Text style={styles.titulo} numberOfLines={1}>
             {titulo ?? 'Vídeo'}
@@ -79,21 +93,19 @@ export function VisorDeVideo({
           </Pressable>
         </View>
 
-        {/* El vídeo no cierra al tocarlo: ahí dentro están nuestros controles. */}
-        <Pressable
-          style={[styles.marco, { width: tam.width, height: tam.height }]}
-          onPress={(e) => e.stopPropagation?.()}
-        >
+        {/* Una View a secas: ahí dentro están los controles del reproductor, y
+            no puede haber nada por encima que le robe el toque. */}
+        <View style={[styles.marco, { width: tam.width, height: tam.height }]}>
           <MarcaDeAgua profile={profile}>
             <VideoPlayer url={url} protectedContent={protegido} />
           </MarcaDeAgua>
-        </Pressable>
+        </View>
 
-        <View style={styles.aviso}>
+        <View style={styles.aviso} pointerEvents="none">
           <Ionicons name="shield-checkmark-outline" size={13} color={colors.textFaint} />
           <Text style={styles.avisoTexto}>{avisoDeProteccion(Platform.OS)}</Text>
         </View>
-      </Pressable>
+      </View>
     </Modal>
   );
 }

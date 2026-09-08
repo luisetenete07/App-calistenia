@@ -203,5 +203,38 @@ console.log('\nEn el móvil las clases ya no van blindadas');
   ok('y sigue sin poder navegar fuera', /onShouldStartLoadWithRequest/.test(vp));
 }
 
+console.log('\nUn vídeo que no carga lo dice, en vez de quedarse negro');
+{
+  /*
+   * EL FALLO SILENCIOSO
+   *
+   * Si el WebView no conseguía cargar el reproductor —sin cobertura, un vídeo
+   * que su dueño ha puesto como no incrustable, una red que bloquea YouTube—
+   * lo que quedaba era un rectángulo negro, quieto y sin explicación. Para el
+   * alumno eso es "la app está rota"; para nosotros, un aviso que llega como
+   * "el reproductor no funciona" y sin nada con lo que trabajar.
+   */
+  const p = lee('components/VideoPlayer.tsx');
+  ok('el reproductor se entera de que ha fallado', /onError=\{\(\) => setFallo\(true\)\}/.test(p));
+  ok('y también si se muere el proceso', /onRenderProcessGone=\{\(\) => setFallo\(true\)\}/.test(p));
+  /*
+   * Pero solo si falla la PÁGINA. En Android `onHttpError` salta también por
+   * cualquier pieza suelta que el reproductor pida y no reciba, y tirar el
+   * vídeo por eso sería cambiar un fallo raro por uno constante.
+   */
+  ok('un recurso suelto no tira el vídeo', /nativeEvent\?\.url === embedUrl/.test(p));
+  ok('se le dice al alumno qué ha pasado', /No se ha podido cargar el vídeo/.test(p));
+  ok('y puede reintentar', /Reintentar/.test(p));
+  /*
+   * Reintentar tiene que volver a montar el WebView entero (por eso la clave
+   * cambia): pedirle que recargue lo que acaba de fallar deja la misma página
+   * rota en pantalla.
+   */
+  ok('el reintento monta el reproductor de nuevo', /key=\{intento\}/.test(p) && /setIntento\(\(n\) => n \+ 1\)/.test(p));
+  // Y un vídeo distinto empieza de cero: lo que falló con uno no tiene por qué
+  // fallar con el siguiente.
+  ok('un vídeo nuevo empieza limpio', /useEffect\(\(\) => setFallo\(false\), \[embedUrl\]\)/.test(p));
+}
+
 console.log(fallos === 0 ? '\nTodo correcto ✔' : `\n${fallos} fallo(s)`);
 process.exit(fallos === 0 ? 0 : 1);

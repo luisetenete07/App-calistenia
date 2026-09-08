@@ -1,5 +1,5 @@
 import React from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { Text } from './Texto';
 import { Ionicons } from '@expo/vector-icons';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -252,11 +252,76 @@ function VimeoVideo({
    * carga el propio reproductor y lo que este necesite. Un toque en "Ver en
    * YouTube" no hace nada, que es exactamente lo que tiene que hacer.
    */
+  return <VideoEnWebView embedUrl={embedUrl} protectedContent={protectedContent} />;
+}
+
+/**
+ * El WebView del reproductor, con lo que pasa cuando NO carga.
+ *
+ * UN VÍDEO QUE FALLA TIENE QUE DECIRLO
+ *
+ * Antes, si el WebView no conseguía cargar el reproductor —sin cobertura, un
+ * vídeo que su dueño ha puesto como no incrustable, una red que bloquea
+ * YouTube— lo que quedaba era un rectángulo negro, quieto y sin explicación.
+ * Para el alumno eso es "la app está rota", y para nosotros es un aviso que
+ * llega como "el reproductor no funciona" y sin nada más con lo que trabajar.
+ *
+ * Ahora se ve qué ha pasado y hay un botón de reintentar, que además arregla
+ * el caso más común de todos: el vídeo que falló porque en ese momento no
+ * había red.
+ */
+function VideoEnWebView({
+  embedUrl,
+  protectedContent,
+}: {
+  embedUrl: string;
+  protectedContent?: boolean;
+}) {
+  const [fallo, setFallo] = React.useState(false);
+  // Cambiar la clave vuelve a montar el WebView entero: es la forma de
+  // reintentar de verdad, y no de pedirle que recargue lo que ya falló.
+  const [intento, setIntento] = React.useState(0);
+
+  // Vídeo nuevo, oportunidad nueva.
+  React.useEffect(() => setFallo(false), [embedUrl]);
+
+  if (fallo) {
+    return (
+      <View style={styles.placeholder}>
+        <Ionicons name="cloud-offline-outline" size={28} color={colors.textFaint} />
+        <Text style={styles.placeholderText}>No se ha podido cargar el vídeo</Text>
+        <Pressable
+          onPress={() => {
+            setFallo(false);
+            setIntento((n) => n + 1);
+          }}
+          hitSlop={8}
+          style={styles.reintentar}
+        >
+          <Ionicons name="refresh" size={14} color={colors.primary} />
+          <Text style={styles.reintentarTexto}>Reintentar</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   const { WebView } = require('react-native-webview');
   return (
     <View style={styles.video}>
       <WebView
+        key={intento}
         source={{ uri: embedUrl }}
+        onError={() => setFallo(true)}
+        /*
+         * Solo si falla la PÁGINA. En Android esto salta también por cualquier
+         * pieza suelta que el reproductor pida y no reciba —un icono, una
+         * medición—, y tirar el vídeo por eso sería cambiar un fallo raro por
+         * uno constante.
+         */
+        onHttpError={(e: { nativeEvent: { url?: string } }) => {
+          if (e?.nativeEvent?.url === embedUrl) setFallo(true);
+        }}
+        onRenderProcessGone={() => setFallo(true)}
         allowsFullscreenVideo
         allowsInlineMediaPlayback
         mediaPlaybackRequiresUserAction={false}
@@ -341,4 +406,6 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   placeholderText: { ...typography.small, color: colors.textFaint },
+  reintentar: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: spacing.xs },
+  reintentarTexto: { ...typography.small, color: colors.primary },
 });

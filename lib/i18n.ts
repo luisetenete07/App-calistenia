@@ -1203,6 +1203,7 @@ export const EN: Record<string, string> = {
     "It still isn't verified. Check your inbox (and spam).",
   'Correo de verificación reenviado': 'Verification email resent',
   'Vídeo no disponible': 'Video not available',
+  'No se ha podido cargar el vídeo': 'The video could not be loaded',
   'Ver más grande': 'View larger',
   'Este alumno no tiene rutina activa, así que todavía no hay ejercicios que programar. Créale una y vuelve.':
     'This student has no active routine, so there is nothing to programme yet. Create one and come back.',

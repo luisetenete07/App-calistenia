@@ -9,6 +9,7 @@
  *
  *   node --experimental-strip-types --import ./scripts/_ts-hook.mjs scripts/check-visor.mjs
  */
+import { readFileSync } from 'node:fs';
 import {
   ALTO_MAXIMO,
   ANCHO_MAXIMO,
@@ -89,6 +90,44 @@ console.log('\nNada raro rompe la cuenta');
   const sinRelacion = tamanoDelVisor(1440, 900, 0);
   comprueba('sin relación se usa la de siempre',
     Math.abs(sinRelacion.width / sinRelacion.height - RELACION) < 0.02);
+}
+
+console.log('\nNada por encima del reproductor que le quite el toque');
+{
+  /*
+   * EL FALLO QUE ESTO CIERRA
+   *
+   * El vídeo colgaba de DOS pulsables: uno que envolvía la pantalla entera
+   * para cerrar al tocar fuera, y otro rodeando el marco para que tocar el
+   * vídeo no cerrara. En el ordenador eso funciona porque el navegador tiene
+   * `stopPropagation`; en el móvil ese método NO EXISTE en el evento de React
+   * Native, y quien decide de quién es el toque es el sistema de responders.
+   * Un WebView debajo de dos pulsables es la receta conocida de "el vídeo se
+   * ve pero el play no responde", que es justo como se vive desde fuera que
+   * "el reproductor no funciona".
+   *
+   * Ahora el fondo va DETRÁS, como una capa suelta, y el marco del vídeo es una
+   * View a secas.
+   *
+   *   node --experimental-strip-types --import ./scripts/_ts-hook.mjs scripts/check-visor.mjs
+   */
+  const visor = readFileSync(new URL('../components/VisorDeVideo.tsx', import.meta.url), 'utf8');
+  const marco = visor.slice(visor.indexOf('<Modal'), visor.indexOf('</Modal>'));
+
+  comprueba(
+    'el fondo que cierra va detrás, no envolviendo',
+    /<Pressable style=\{StyleSheet\.absoluteFill\} onPress=\{onCerrar\} \/>/.test(marco)
+  );
+  comprueba(
+    'el marco del vídeo es una View, no un pulsable',
+    /<View style=\{\[styles\.marco/.test(marco) && !/<Pressable[^>]*styles\.marco/.test(marco)
+  );
+  // Y no queda ningún `stopPropagation`, que en móvil no hace nada y daba la
+  // falsa sensación de tener el problema resuelto.
+  comprueba('sin stopPropagation, que en móvil no existe', !/stopPropagation\?\.\(\)/.test(visor));
+  // La marca de agua va encima del vídeo: si capturara toques, taparía el play.
+  const marca = readFileSync(new URL('../components/MarcaDeAgua.tsx', import.meta.url), 'utf8');
+  comprueba('la marca de agua deja pasar los toques', /styles\.capa\} pointerEvents="none"/.test(marca));
 }
 
 console.log(fallos === 0 ? '\nTodo correcto ✔' : `\n${fallos} fallo(s)`);
