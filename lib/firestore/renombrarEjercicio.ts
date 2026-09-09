@@ -1,7 +1,8 @@
 import { collection, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { diasRenombrados, objetivosRenombrados } from '../renombrarEjercicio';
-import type { Routine, RoutineTemplate, TrainingCycle } from '../types';
+import { ejerciciosActualizados } from '../rutinaDiaria';
+import type { Routine, RoutineTemplate, RutinaDiaria, TrainingCycle } from '../types';
 
 /**
  * Llevar el nombre nuevo de un ejercicio a todo lo que lo tenía copiado.
@@ -31,17 +32,30 @@ import type { Routine, RoutineTemplate, TrainingCycle } from '../types';
 export async function propagarNombreDeEjercicio(
   trainerId: string,
   ejercicioId: string,
-  nombre: string
+  nombre: string,
+  /*
+   * El vídeo, cuando también ha cambiado.
+   *
+   * Solo lo necesitan las RUTINAS DIARIAS, que son las únicas que se traen el
+   * enlace copiado; los planes guardan el identificador del ejercicio y leen el
+   * vídeo de la biblioteca cada vez, así que ahí no hay nada que actualizar.
+   *
+   * `undefined` significa "no lo toques". Una cadena vacía sí es una orden: el
+   * entrenador ha quitado el vídeo, y dejar el viejo puesto sería enseñar una
+   * técnica que ha retirado a propósito.
+   */
+  video?: string
 ): Promise<number> {
   if (!trainerId || !ejercicioId || !nombre) return 0;
 
   const suyos = (nombreColeccion: string) =>
     getDocs(query(collection(db, nombreColeccion), where('trainerId', '==', trainerId)));
 
-  const [rutinas, plantillas, ciclos] = await Promise.all([
+  const [rutinas, plantillas, ciclos, diarias] = await Promise.all([
     suyos('routines'),
     suyos('routineTemplates'),
     suyos('trainingCycles'),
+    suyos('rutinasDiarias'),
   ]);
 
   const escrituras: Promise<unknown>[] = [];
@@ -63,6 +77,21 @@ export async function propagarNombreDeEjercicio(
       nombre
     );
     if (objetivos) escrituras.push(updateDoc(d.ref, { objetivos, updatedAt: Date.now() }));
+  }
+
+  /*
+   * Y las RUTINAS DIARIAS, que son las que se traen el ejercicio de la
+   * biblioteca con su nombre y su vídeo copiados dentro. Sin esto, corregir una
+   * falta o cambiar el enlace del vídeo dejaba lo viejo puesto en la rutina
+   * diaria de todo el que ya lo tuviera, que es justo lo que esta función
+   * existe para evitar.
+   */
+  for (const d of diarias.docs) {
+    const lista = ejerciciosActualizados((d.data() as RutinaDiaria).ejercicios, ejercicioId, {
+      nombre,
+      video,
+    });
+    if (lista) escrituras.push(updateDoc(d.ref, { ejercicios: lista, updatedAt: Date.now() }));
   }
 
   await Promise.all(escrituras);

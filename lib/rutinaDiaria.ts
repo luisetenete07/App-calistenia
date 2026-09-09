@@ -82,6 +82,95 @@ export function seriesDeTexto(texto: string): number | undefined {
   return Math.min(MAX_SERIES, n);
 }
 
+/** Lo que hace falta de un ejercicio de la biblioteca para traérselo. */
+export interface EjercicioDeBiblioteca {
+  id: string;
+  name: string;
+  videoUrl?: string;
+}
+
+/**
+ * Trae un ejercicio de la biblioteca a la rutina diaria, con lo que ya tiene.
+ *
+ * POR QUÉ EXISTE
+ *
+ * Antes, para poner el pino en la rutina diaria de un alumno había que escribir
+ * "Pino contra pared" y pegar el enlace del vídeo a mano. Otra vez. Y para el
+ * siguiente alumno, otra vez. El ejercicio ya existía en la biblioteca del
+ * entrenador, con su nombre y su vídeo, y no había forma de decir "ese".
+ *
+ * SE COPIA EL NOMBRE Y EL VÍDEO, Y SE GUARDA DE DÓNDE SALIÓ
+ *
+ * La copia es lo que hace que el alumno vea su rutina de un tirón, leyendo un
+ * solo documento y sin pedir la biblioteca de su entrenador. Y `exerciseId` es
+ * lo que permite que, al corregir el ejercicio en la biblioteca, la corrección
+ * llegue hasta aquí (ver lib/firestore/renombrarEjercicio.ts): sin él, una
+ * falta de ortografía arreglada en la biblioteca se quedaría para siempre en la
+ * rutina diaria de quien ya lo tuviera puesto.
+ *
+ * El objetivo y las series NO vienen de la biblioteca a propósito: son de este
+ * alumno y de este momento —"30 s por lado", "5 series repartidas"—, no del
+ * ejercicio.
+ */
+export function deLaBiblioteca(
+  ejercicio: EjercicioDeBiblioteca,
+  id: string,
+  extra?: { objetivo?: string; series?: number }
+): EjercicioDiario {
+  const video = ejercicio.videoUrl?.trim();
+  return {
+    id,
+    exerciseId: ejercicio.id,
+    nombre: ejercicio.name.trim(),
+    objetivo: extra?.objetivo?.trim() ?? '',
+    ...(extra?.series ? { series: extra.series } : {}),
+    ...(video ? { video } : {}),
+  };
+}
+
+/**
+ * ¿Está ya puesto este ejercicio de la biblioteca?
+ *
+ * Poner dos veces el mismo pino no es un error que la app deba impedir —hay
+ * quien programa el mismo ejercicio dos veces con objetivos distintos— pero sí
+ * merece avisarse, que casi siempre es un despiste.
+ */
+export function yaEstaPuesto(ejercicios: EjercicioDiario[], exerciseId: string): boolean {
+  return ejercicios.some((e) => e.exerciseId === exerciseId);
+}
+
+/**
+ * La lista con el nombre y el vídeo nuevos de un ejercicio de la biblioteca.
+ *
+ * Devuelve `null` cuando no cambia nada, para que quien llama no escriba en
+ * Firestore por gusto: un entrenador con cuarenta alumnos que corrige una falta
+ * en un ejercicio que solo usan tres no puede pagar cuarenta escrituras.
+ *
+ * El vídeo se borra si en la biblioteca se ha quitado: dejar el viejo sería
+ * enseñar una técnica que el entrenador ha retirado a propósito.
+ */
+export function ejerciciosActualizados(
+  ejercicios: EjercicioDiario[] | undefined,
+  exerciseId: string,
+  cambios: { nombre?: string; video?: string }
+): EjercicioDiario[] | null {
+  if (!ejercicios?.length || !exerciseId) return null;
+  let tocado = false;
+  const salida = ejercicios.map((e) => {
+    if (e.exerciseId !== exerciseId) return e;
+    const nombre = cambios.nombre?.trim() || e.nombre;
+    const video = cambios.video?.trim();
+    const siguiente: EjercicioDiario = { ...e, nombre };
+    if (cambios.video !== undefined) {
+      if (video) siguiente.video = video;
+      else delete siguiente.video;
+    }
+    if (siguiente.nombre !== e.nombre || siguiente.video !== e.video) tocado = true;
+    return siguiente;
+  });
+  return tocado ? salida : null;
+}
+
 /**
  * Cambia un ejercicio de sitio en la lista.
  *

@@ -147,8 +147,10 @@ console.log('\nLa ficha de nutrición del alumno');
    * pared)". Mismo caso y misma cura: la palabra "Ejercicio" la dice ya la
    * lista que hay justo encima del campo.
    */
+  // El editor de la rutina diaria usa TextInput pelado, así que sus textos de
+  // ejemplo pasan por `t()` a mano: la comprobación admite las dos formas.
   ok('el ejemplo del ejercicio diario es corto',
-    /placeholder="Ej\. Pino contra pared"/.test(lee('components/RutinaDiariaEditor.tsx')));
+    /placeholder=(\{t\()?'?"?Ej\. Pino contra pared'?"?/.test(lee('components/RutinaDiariaEditor.tsx')));
 }
 
 console.log(fallos === 0 ? '\nTodo correcto ✔' : `\n${fallos} fallo(s)`);

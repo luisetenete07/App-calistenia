@@ -20,12 +20,15 @@
 import { readFileSync } from 'node:fs';
 import {
   conMarca,
+  deLaBiblioteca,
+  ejerciciosActualizados,
   hayRutinaDiaria,
   hechosDeHoy,
   marcaDeSerie,
   marcasDeLaRutina,
   moverEjercicio,
   MAX_SERIES,
+  yaEstaPuesto,
   progresoDiario,
   seriesDe,
   seriesDeTexto,
@@ -251,6 +254,79 @@ console.log('\nQuién puede tocarla (reglas)');
   ok('y el id del día también lleva su uid',
     /diaId\.split\('_'\)\[0\] == request\.auth\.uid/.test(dias));
   ok('su entrenador puede leerlo', /resource\.data\.trainerId == request\.auth\.uid/.test(dias));
+}
+
+console.log('\nTraerse un ejercicio de la biblioteca');
+{
+  /*
+   * POR QUÉ EXISTE
+   *
+   * Antes había que escribir "Pino contra pared" y pegar el enlace del vídeo a
+   * mano, para cada alumno, aunque el ejercicio ya estuviera en la biblioteca
+   * con su nombre bien escrito y su vídeo puesto. Era trabajo repetido, y era
+   * donde se colaban las erratas y los vídeos que nadie llegaba a poner.
+   */
+  const pino = { id: 'ej-pino', name: 'Pino contra pared', videoUrl: 'https://youtu.be/abc' };
+  const traido = deLaBiblioteca(pino, 'id1');
+  ok('se trae el nombre', traido.nombre === 'Pino contra pared');
+  ok('y el vídeo', traido.video === 'https://youtu.be/abc');
+  // De dónde salió: es lo que permite corregirlo después desde la biblioteca.
+  ok('y de qué ejercicio salió', traido.exerciseId === 'ej-pino');
+
+  /*
+   * El objetivo y las series NO vienen de la biblioteca: son de este alumno y
+   * de este momento —"30 s por lado", "5 series repartidas"—, no del ejercicio.
+   */
+  ok('el objetivo empieza vacío', traido.objetivo === '');
+  ok('y sin series', traido.series === undefined);
+  const conExtra = deLaBiblioteca(pino, 'id2', { objetivo: ' 30 s ', series: 5 });
+  ok('pero se respeta lo que hubiera escrito', conExtra.objetivo === '30 s' && conExtra.series === 5);
+
+  // Un ejercicio sin vídeo no deja el campo puesto a vacío ensuciando el documento.
+  const sinVideo = deLaBiblioteca({ id: 'x', name: 'Movilidad' }, 'id3');
+  ok('sin vídeo, no se guarda el campo', !('video' in sinVideo));
+
+  // Repetido: se avisa. No se impide —hay quien programa el mismo dos veces con
+  // objetivos distintos— pero casi siempre es un despiste.
+  ok('se sabe si ya está puesto', yaEstaPuesto([traido], 'ej-pino') === true);
+  ok('y si no', yaEstaPuesto([traido], 'otro') === false);
+  // Uno escrito a mano no tiene de dónde venir, y no puede confundirse con nada.
+  ok('lo escrito a mano no cuenta como puesto',
+    yaEstaPuesto([{ id: 'a', nombre: 'Pino contra pared', objetivo: '' }], 'ej-pino') === false);
+}
+
+console.log('\nY al corregirlo en la biblioteca, se corrige aquí');
+{
+  /*
+   * Es la otra mitad de traérselo. Sin esto, una falta de ortografía arreglada
+   * en la biblioteca —o un vídeo cambiado— se quedaba para siempre en la rutina
+   * diaria de todo el que ya lo tuviera puesto, y había que quitarlo y volverlo
+   * a poner. Que es exactamente lo que esto venía a evitar.
+   */
+  const lista = [
+    { id: 'a', exerciseId: 'ej-pino', nombre: 'Pino contra pare', objetivo: '30 s', video: 'v1' },
+    { id: 'b', nombre: 'Escrito a mano', objetivo: '' },
+  ];
+  const arreglada = ejerciciosActualizados(lista, 'ej-pino', { nombre: 'Pino contra pared' });
+  ok('se corrige el nombre', arreglada?.[0].nombre === 'Pino contra pared');
+  ok('sin tocar lo escrito a mano', arreglada?.[1].nombre === 'Escrito a mano');
+  ok('y sin perder el objetivo del alumno', arreglada?.[0].objetivo === '30 s');
+  // El vídeo solo se toca si se manda: `undefined` es "no lo toques".
+  ok('el vídeo se queda si no se manda', arreglada?.[0].video === 'v1');
+  ok('se cambia si se manda',
+    ejerciciosActualizados(lista, 'ej-pino', { nombre: 'Pino', video: 'v2' })?.[0].video === 'v2');
+  // Y quitarlo es una orden: dejar el viejo sería enseñar una técnica retirada.
+  const sinVideo = ejerciciosActualizados(lista, 'ej-pino', { nombre: 'Pino', video: '' });
+  ok('y se quita si se manda vacío', sinVideo !== null && !('video' in sinVideo[0]));
+
+  /*
+   * Y no se escribe si no cambia nada: un entrenador con cuarenta alumnos que
+   * corrige un ejercicio que solo usan tres no puede pagar cuarenta escrituras.
+   */
+  ok('sin cambios, no se escribe',
+    ejerciciosActualizados(lista, 'ej-pino', { nombre: 'Pino contra pare' }) === null);
+  ok('ni si el ejercicio no está', ejerciciosActualizados(lista, 'otro', { nombre: 'X' }) === null);
+  ok('ni con la lista vacía', ejerciciosActualizados([], 'ej-pino', { nombre: 'X' }) === null);
 }
 
 console.log(fallos === 0 ? '\nTodo correcto ✔' : `\n${fallos} fallo(s)`);

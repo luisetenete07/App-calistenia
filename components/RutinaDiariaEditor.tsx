@@ -4,17 +4,22 @@ import { Text } from './Texto';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from './Card';
 import { DragList } from './DragList';
+import { Sheet } from './Sheet';
 import { showToast } from './Toast';
+import { getExerciseLibrary } from '../lib/firestore/exercises';
 import { getRutinaDiaria, setRutinaDiaria } from '../lib/firestore/rutinaDiaria';
+import { frase, t } from '../lib/idioma';
 import { nuevoId } from '../lib/ids';
 import {
+  deLaBiblioteca,
   moverEjercicio,
   NOMBRE_POR_DEFECTO,
   seriesDeTexto,
   textoDelEjercicio,
+  yaEstaPuesto,
 } from '../lib/rutinaDiaria';
 import { colors, fonts, radius, spacing, typography } from '../lib/theme';
-import type { EjercicioDiario } from '../lib/types';
+import type { EjercicioDiario, Exercise } from '../lib/types';
 
 /**
  * Lo que este alumno hace TODOS los días, aparte de su plan.
@@ -75,6 +80,21 @@ export function RutinaDiariaEditor({
   const [nuevasSeries, setNuevasSeries] = useState('');
   /** Cuál se está editando. Solo uno a la vez: la tarjeta es pequeña. */
   const [editando, setEditando] = useState<string | null>(null);
+  /*
+   * LA BIBLIOTECA, PARA NO ESCRIBIRLO TODO OTRA VEZ
+   *
+   * Los ejercicios ya existen: tienen su nombre escrito como toca y su vídeo de
+   * técnica puesto. Escribirlos de nuevo aquí —y volver a pegar el enlace— es
+   * trabajo repetido para cada alumno, y además es donde se cuelan las erratas
+   * y los vídeos que nadie llega a poner.
+   *
+   * Se carga solo al abrir el selector: la mayoría de las veces que se toca
+   * esta tarjeta es para marcar el interruptor o cambiar un objetivo, y pedir
+   * la biblioteca entera para eso sería una lectura de más en cada visita.
+   */
+  const [bibliotecaAbierta, setBibliotecaAbierta] = useState(false);
+  const [biblioteca, setBiblioteca] = useState<Exercise[] | null>(null);
+  const [busca, setBusca] = useState('');
 
   useEffect(() => {
     let vivo = true;
@@ -143,6 +163,51 @@ export function RutinaDiariaEditor({
     const encender = !activa && lista.length === 1;
     if (encender) setActiva(true);
     void guardar({ ejercicios: lista, activa: encender ? true : activa });
+  };
+
+  const abrirBiblioteca = async () => {
+    setBusca('');
+    setBibliotecaAbierta(true);
+    if (biblioteca) return;
+    try {
+      setBiblioteca(await getExerciseLibrary(trainerId));
+    } catch {
+      setBiblioteca([]);
+      showToast('No se ha podido cargar tu biblioteca');
+    }
+  };
+
+  /**
+   * Trae uno de la biblioteca con su nombre y su vídeo ya puestos.
+   *
+   * El panel NO se cierra al elegir: lo normal es poner tres o cuatro cosas
+   * seguidas —pino, muñecas, movilidad de cadera— y tener que abrirlo otra vez
+   * cada vez es lo que hace que se acabe escribiendo a mano.
+   *
+   * Lo que sí se lleva es el objetivo y las series que hubiera escritos abajo,
+   * si los hay: quien ha tecleado "30 s" y luego elige el ejercicio espera que
+   * se aplique, no que se pierda.
+   */
+  const anadirDeBiblioteca = (ej: Exercise) => {
+    if (yaEstaPuesto(ejercicios, ej.id)) {
+      showToast(frase`${ej.name} ya está en la rutina`);
+      return;
+    }
+    const lista = [
+      ...ejercicios,
+      deLaBiblioteca(ej, nuevoId(), {
+        objetivo: nuevoObjetivo,
+        series: seriesDeTexto(nuevasSeries),
+      }),
+    ];
+    setEjercicios(lista);
+    setNuevoNombre('');
+    setNuevoObjetivo('');
+    setNuevasSeries('');
+    const encender = !activa && lista.length === 1;
+    if (encender) setActiva(true);
+    void guardar({ ejercicios: lista, activa: encender ? true : activa });
+    showToast(ej.videoUrl?.trim() ? frase`${ej.name} añadido, con su vídeo` : frase`${ej.name} añadido`);
   };
 
   const quitar = (id: string) => {
@@ -237,7 +302,7 @@ export function RutinaDiariaEditor({
             value={nombre}
             onChangeText={setNombre}
             onBlur={() => guardar({ nombre })}
-            placeholder={NOMBRE_POR_DEFECTO}
+            placeholder={t(NOMBRE_POR_DEFECTO)}
             placeholderTextColor={colors.textFaint}
           />
 
@@ -308,7 +373,7 @@ export function RutinaDiariaEditor({
                       defaultValue={e.objetivo}
                       onChangeText={(t) => cambiar(e.id, { objetivo: t })}
                       onBlur={guardarLista}
-                      placeholder="Objetivo (p. ej. 30 s por lado)"
+                      placeholder={t('Objetivo (p. ej. 30 s por lado)')}
                       placeholderTextColor={colors.textFaint}
                     />
                     <View style={styles.edicionFila}>
@@ -317,7 +382,7 @@ export function RutinaDiariaEditor({
                         defaultValue={e.series ? String(e.series) : ''}
                         onChangeText={(t) => cambiar(e.id, { series: seriesDeTexto(t) })}
                         onBlur={guardarLista}
-                        placeholder="Series"
+                        placeholder={t('Series')}
                         placeholderTextColor={colors.textFaint}
                         keyboardType="number-pad"
                       />
@@ -330,7 +395,7 @@ export function RutinaDiariaEditor({
                       defaultValue={e.video ?? ''}
                       onChangeText={(t) => cambiar(e.id, { video: t.trim() || undefined })}
                       onBlur={guardarLista}
-                      placeholder="Enlace del vídeo (YouTube o Vimeo)"
+                      placeholder={t('Enlace del vídeo (YouTube o Vimeo)')}
                       placeholderTextColor={colors.textFaint}
                       autoCapitalize="none"
                       autoCorrect={false}
@@ -343,6 +408,17 @@ export function RutinaDiariaEditor({
           />
 
           <View style={styles.anadir}>
+            {/* Primero la biblioteca y después el campo de escribir: lo normal
+                es que el ejercicio YA exista con su nombre y su vídeo, y
+                escribirlo a mano sea la excepción. Puesto debajo, se escribía
+                a mano por inercia y los vídeos no se ponían nunca. */}
+            <Pressable onPress={abrirBiblioteca} style={styles.botonBiblioteca} hitSlop={4}>
+              <Ionicons name="library-outline" size={16} color={colors.primary} />
+              {/* La biblioteca es del entrenador, y cuando el atleta se
+                  autoentrena es la suya: en los dos casos "mi biblioteca". */}
+              <Text style={styles.botonBibliotecaTexto}>Elegir de mi biblioteca</Text>
+            </Pressable>
+            <Text style={styles.oEscribe}>o escríbelo a mano:</Text>
             <TextInput
               style={styles.campoEjercicio}
               value={nuevoNombre}
@@ -353,7 +429,7 @@ export function RutinaDiariaEditor({
                * paréntesis. La palabra "Ejercicio" sobra: el campo está debajo
                * de la lista de ejercicios y encima del botón de añadir.
                */
-              placeholder="Ej. Pino contra pared"
+              placeholder={t('Ej. Pino contra pared')}
               placeholderTextColor={colors.textFaint}
               returnKeyType="next"
             />
@@ -362,7 +438,7 @@ export function RutinaDiariaEditor({
                 style={[styles.campoEjercicio, styles.campoObjetivoNuevo]}
                 value={nuevoObjetivo}
                 onChangeText={setNuevoObjetivo}
-                placeholder="Objetivo (p. ej. 30 s)"
+                placeholder={t('Objetivo (p. ej. 30 s)')}
                 placeholderTextColor={colors.textFaint}
                 onSubmitEditing={anadir}
                 returnKeyType="done"
@@ -371,7 +447,7 @@ export function RutinaDiariaEditor({
                 style={[styles.campoEjercicio, styles.campoSeries]}
                 value={nuevasSeries}
                 onChangeText={setNuevasSeries}
-                placeholder="Series"
+                placeholder={t('Series')}
                 placeholderTextColor={colors.textFaint}
                 keyboardType="number-pad"
               />
@@ -386,6 +462,73 @@ export function RutinaDiariaEditor({
           </View>
         </>
       ) : null}
+
+      {/* Los ejercicios que ya existen, con su vídeo. Se eligen de aquí en vez
+          de volver a escribirlos: ver `deLaBiblioteca` en lib/rutinaDiaria.ts. */}
+      <Sheet
+        visible={bibliotecaAbierta}
+        onClose={() => {
+          setBibliotecaAbierta(false);
+          setBusca('');
+        }}
+        titulo="Elegir de tu biblioteca"
+        descripcion="Se traen con su nombre y su vídeo. Puedes elegir varios seguidos."
+      >
+        <TextInput
+          style={styles.campoEjercicio}
+          value={busca}
+          onChangeText={setBusca}
+          placeholder={t('Buscar')}
+          placeholderTextColor={colors.textFaint}
+          autoFocus
+        />
+        {biblioteca === null ? (
+          <Text style={styles.vacioBiblioteca}>Cargando tu biblioteca…</Text>
+        ) : biblioteca.length === 0 ? (
+          <Text style={styles.vacioBiblioteca}>
+            Todavía no tienes ejercicios en tu biblioteca. Créalos en Ejercicios y aparecerán aquí.
+          </Text>
+        ) : (
+          (() => {
+            const busqueda = busca.trim().toLowerCase();
+            const encontrados = biblioteca.filter((e) =>
+              busqueda ? e.name.toLowerCase().includes(busqueda) : true
+            );
+            if (encontrados.length === 0) {
+              return <Text style={styles.vacioBiblioteca}>Ninguno se llama así.</Text>;
+            }
+            /*
+             * Un tope de doce: la lista va dentro de un panel y con biblioteca
+             * de doscientos ejercicios se convierte en un scroll interminable.
+             * Para eso está el buscador de arriba.
+             */
+            return encontrados.slice(0, 12).map((e) => {
+              const puesto = yaEstaPuesto(ejercicios, e.id);
+              return (
+                <Pressable
+                  key={e.id}
+                  onPress={() => anadirDeBiblioteca(e)}
+                  style={[styles.filaBiblioteca, puesto && styles.filaBibliotecaPuesta]}
+                >
+                  <Ionicons
+                    name={puesto ? 'checkmark-circle' : 'add-circle-outline'}
+                    size={18}
+                    color={puesto ? colors.primary : colors.textMuted}
+                  />
+                  <Text style={styles.filaBibliotecaTexto} numberOfLines={1}>
+                    {e.name}
+                  </Text>
+                  {/* Que se vea de antemano cuáles traen vídeo: si no, hay que
+                      añadirlo para descubrir que no lo tiene. */}
+                  {e.videoUrl?.trim() ? (
+                    <Ionicons name="play-circle-outline" size={15} color={colors.primary} />
+                  ) : null}
+                </Pressable>
+              );
+            });
+          })()
+        )}
+      </Sheet>
     </Card>
   );
 }
@@ -478,4 +621,28 @@ const styles = StyleSheet.create({
   },
   botonApagado: { opacity: 0.4 },
   botonAnadirTexto: { ...typography.small, color: colors.onPrimary, fontFamily: fonts.semiBold },
+  botonBiblioteca: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.surfaceAlt,
+  },
+  botonBibliotecaTexto: { ...typography.small, color: colors.primary, fontFamily: fonts.semiBold },
+  oEscribe: { ...typography.small, color: colors.textFaint, marginTop: spacing.sm },
+  filaBiblioteca: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.hairline,
+  },
+  filaBibliotecaPuesta: { opacity: 0.55 },
+  filaBibliotecaTexto: { ...typography.body, color: colors.text, flex: 1 },
+  vacioBiblioteca: { ...typography.small, color: colors.textFaint, paddingVertical: spacing.md },
 });

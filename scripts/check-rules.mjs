@@ -555,6 +555,29 @@ await comprobar('el entrenador recupera una tabla con dueño equivocado', true, 
 // defecto (se muestran todos los ejercicios).
 await deleteDoc(doc(db, 'progressTrackers', alumno.id)).catch(() => {});
 
+/*
+ * LA PROPAGACIÓN NECESITA PODER PREGUNTAR POR LAS RUTINAS DIARIAS DE SUS ALUMNOS
+ *
+ * Al corregir un ejercicio de la biblioteca, la app recorre las rutinas diarias
+ * del entrenador para llevar el nombre y el vídeo nuevos a quien lo tuviera
+ * puesto (ver lib/firestore/renombrarEjercicio.ts). Eso es una CONSULTA por
+ * `trainerId`, no una lectura por id, y las reglas la tienen que admitir.
+ *
+ * Si no la admitieran, no saltaría ningún error visible: la propagación fallaría
+ * en silencio y el entrenador vería el ejercicio bien en su biblioteca y mal en
+ * la rutina diaria de sus alumnos, sin entender por qué.
+ */
+await signInWithEmailAndPassword(auth, 'coach@demo.test', PW);
+console.log('\nLa propagación de un ejercicio a las rutinas diarias');
+await comprobar('el entrenador consulta las rutinas diarias de sus alumnos', true, () =>
+  getDocs(query(collection(db, 'rutinasDiarias'), where('trainerId', '==', coach.user.uid)))
+);
+// Y no las de otro: la consulta sin filtro, o con el uid de otro, se rechaza.
+await comprobar('pero no las de otro entrenador', false, () =>
+  getDocs(query(collection(db, 'rutinasDiarias'), where('trainerId', '==', 'otro-cualquiera')))
+);
+await comprobar('ni todas de golpe', false, () => getDocs(collection(db, 'rutinasDiarias')));
+
 console.log(
   fallos === 0
     ? '\n✔ Todas las comprobaciones de reglas pasan.\n'

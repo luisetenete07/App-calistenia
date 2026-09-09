@@ -76,10 +76,19 @@ export default function ExerciseEditorScreen() {
   // Nombres ya usados en la biblioteca, para no crear duplicados.
   const [takenNames, setTakenNames] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
-  // Cómo se llamaba al abrir. Solo sirve para saber si el nombre ha cambiado:
-  // sin esto habría que recorrer las rutinas de todos los alumnos cada vez que
-  // se guarda, aunque lo único que se haya tocado sea el vídeo.
+  /*
+   * Cómo se llamaba y qué vídeo tenía al abrir.
+   *
+   * Sirve para saber si hay algo que llevar a las copias. Sin esto habría que
+   * recorrer las rutinas de todos los alumnos en CADA guardado, aunque lo único
+   * que se haya tocado sea la descripción.
+   *
+   * El vídeo entró en la cuenta cuando las rutinas diarias empezaron a traerse
+   * los ejercicios de la biblioteca: esas sí copian el enlace dentro, así que
+   * cambiarlo en la biblioteca tiene que llegar hasta ellas.
+   */
   const nombreAlAbrir = useRef('');
+  const videoAlAbrir = useRef('');
 
   useEffect(() => {
     if (isNew || !id) return;
@@ -87,6 +96,7 @@ export default function ExerciseEditorScreen() {
       const exercise = await getExercise(id);
       if (exercise) {
         nombreAlAbrir.current = exercise.name;
+        videoAlAbrir.current = exercise.videoUrl ?? '';
         setName(exercise.name);
         setMuscleGroup(exercise.muscleGroup);
         setDescription(exercise.description ?? '');
@@ -153,12 +163,22 @@ export default function ExerciseEditorScreen() {
          * que no puede pasar es que un fallo aquí parezca que no se guardó
          * nada y el entrenador lo escriba otra vez.
          */
-        if (nombreAlAbrir.current && nombreAlAbrir.current !== campos.name) {
+        const cambioElNombre = !!nombreAlAbrir.current && nombreAlAbrir.current !== campos.name;
+        const cambioElVideo = videoAlAbrir.current !== (campos.videoUrl ?? '');
+        if (cambioElNombre || cambioElVideo) {
           try {
-            await propagarNombreDeEjercicio(profile.uid, id, campos.name);
+            // El vídeo solo se manda si ha cambiado: `undefined` significa "no
+            // lo toques", y una cadena vacía sí es una orden de quitarlo.
+            await propagarNombreDeEjercicio(
+              profile.uid,
+              id,
+              campos.name,
+              cambioElVideo ? campos.videoUrl ?? '' : undefined
+            );
             nombreAlAbrir.current = campos.name;
+            videoAlAbrir.current = campos.videoUrl ?? '';
           } catch {
-            showToast('Guardado, pero no se pudo cambiar el nombre en las rutinas');
+            showToast('Guardado, pero no se pudo actualizar en las rutinas');
             router.back();
             return;
           }

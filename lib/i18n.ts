@@ -107,6 +107,19 @@ export const EN: Record<string, string> = {
   'Apuntar serie': 'Log set',
   'Quitar la última': 'Remove the last one',
   'Añadir un ejercicio': 'Add an exercise',
+  'Elegir de mi biblioteca': 'Pick from my library',
+  'o escríbelo a mano:': 'or type it by hand:',
+  'Elegir de tu biblioteca': 'Pick from your library',
+  'Se traen con su nombre y su vídeo. Puedes elegir varios seguidos.':
+    'They come with their name and their video. You can pick several in a row.',
+  'Ninguno se llama así.': 'None of them is called that.',
+  'Cargando tu biblioteca…': 'Loading your library…',
+  'No se ha podido cargar tu biblioteca': 'Your library could not be loaded',
+  'Todavía no tienes ejercicios en tu biblioteca. Créalos en Ejercicios y aparecerán aquí.':
+    'You have no exercises in your library yet. Create them in Exercises and they will show up here.',
+  '{0} ya está en la rutina': '{0} is already in the routine',
+  '{0} añadido, con su vídeo': '{0} added, with its video',
+  '{0} añadido': '{0} added',
   'Añadir un ejercicio a esta sesión': 'Add an exercise to this session',
   'Grease the groove': 'Grease the groove',
 
@@ -584,6 +597,7 @@ export const EN: Record<string, string> = {
   Opcional: 'Optional',
   'Nombre del ejercicio': 'Exercise name',
   'Buscar ejercicio...': 'Search exercise...',
+  'Buscar': 'Search',
   'Copiar la rutina activa de...': 'Copy the active routine from...',
   'Cargando alumnos...': 'Loading students...',
   'Plantillas de rutina': 'Routine templates',
@@ -768,6 +782,8 @@ export const EN: Record<string, string> = {
   'Desaparece de tu biblioteca y de las rutinas que lo usen. Los entrenamientos ya registrados con él se quedan como están.':
     'It disappears from your library and from any routine using it. Workouts already logged with it stay as they are.',
   'Ejercicio guardado': 'Exercise saved',
+  'Guardado, pero no se pudo actualizar en las rutinas':
+    'Saved, but it could not be updated in the routines',
   'No se pudo aplicar la medida al grupo': "Couldn't apply the measure to the group",
   'No se pudo soltar la medida del grupo': "Couldn't detach the measure from the group",
   'Ese subgrupo ya existe': 'That subgroup already exists',

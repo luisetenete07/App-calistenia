@@ -1137,6 +1137,16 @@ export interface EjercicioDiario {
   /** Cómo se llama. Lo escribe el entrenador; no hace falta que esté en la biblioteca. */
   nombre: string;
   /**
+   * De qué ejercicio de la biblioteca salió, si salió de una.
+   *
+   * Se puede seguir escribiendo el nombre a mano —hay cosas que no están en la
+   * biblioteca y no merecen estarlo—, y entonces esto va vacío. Cuando sí viene
+   * de la biblioteca, guardar de cuál permite dos cosas: traerse su vídeo de una
+   * vez, y que al corregir el ejercicio en la biblioteca se corrija también
+   * aquí, sin tener que quitarlo y volverlo a poner.
+   */
+  exerciseId?: string;
+  /**
    * Qué hay que hacer, en una línea: "3 series de 30 s", "5 × 5", "2 min".
    *
    * Texto libre y no números sueltos a propósito: aquí caben cosas que no son

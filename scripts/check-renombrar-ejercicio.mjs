@@ -94,14 +94,26 @@ console.log('\nQué colecciones recorre');
 console.log('\nEstá enganchado al guardar del ejercicio');
 {
   const p = lee('app/(trainer)/exercises/[id].tsx');
-  ok('se llama al propagar', /propagarNombreDeEjercicio\(profile\.uid, id, campos\.name\)/.test(p));
-  // Solo cuando el nombre cambia: tocar el vídeo no puede costar un recorrido
-  // por las rutinas de todos los alumnos.
+  ok('se llama al propagar', /propagarNombreDeEjercicio\(\s*profile\.uid,\s*id,\s*campos\.name/.test(p));
+  /*
+   * Solo cuando hay algo que llevar: el nombre, o el vídeo.
+   *
+   * El vídeo entró en la cuenta cuando las rutinas diarias empezaron a traerse
+   * los ejercicios de la biblioteca, porque esas SÍ copian el enlace dentro.
+   * Los planes no: guardan el identificador y leen el vídeo de la biblioteca
+   * cada vez. Lo que no puede pasar es que guardar la descripción cueste un
+   * recorrido por las rutinas de los cuarenta alumnos.
+   */
   ok('solo si el nombre ha cambiado', /nombreAlAbrir\.current !== campos\.name/.test(p));
-  ok('y se guarda cómo se llamaba al abrir', /nombreAlAbrir\.current = exercise\.name/.test(p));
+  ok('o el vídeo', /videoAlAbrir\.current !== \(campos\.videoUrl \?\? ''\)/.test(p));
+  ok('y se guarda cómo estaba al abrir',
+    /nombreAlAbrir\.current = exercise\.name/.test(p) && /videoAlAbrir\.current = exercise\.videoUrl/.test(p));
+  // Quitar el vídeo en la biblioteca también es una orden: dejar el viejo
+  // puesto sería enseñar una técnica que el entrenador ha retirado.
+  ok('quitar el vídeo también se propaga', /cambioElVideo \? campos\.videoUrl \?\? '' : undefined/.test(p));
   // Si falla la propagación, el ejercicio YA está guardado. Decir que no se
   // guardó nada haría que el entrenador lo escribiera otra vez.
-  ok('un fallo al propagar no dice que no se guardó', /Guardado, pero no se pudo cambiar el nombre/.test(p));
+  ok('un fallo al propagar no dice que no se guardó', /Guardado, pero no se pudo actualizar en las rutinas/.test(p));
 }
 
 console.log(fallos === 0 ? '\nTodo correcto ✔' : `\n${fallos} fallo(s)`);
