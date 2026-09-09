@@ -358,10 +358,31 @@ export default function WorkoutScreen() {
             // empezar; solo preseleccionamos si hay sesión en curso o ya entrenó.
             setSelectedDayId((prev) => prev ?? remoteFresh?.id ?? doneTodayDay?.id ?? null);
           } else {
+            /*
+             * SI HOY TOCA DESCANSAR, SE ABRE EL DÍA DE DESCANSO.
+             *
+             * Antes se saltaba: `days.find((d) => !d.isRest)` buscaba el primer
+             * día de ENTRENAR, así que en un día de descanso el alumno abría la
+             * pestaña y se encontraba cargado el Día 1 —o el último que hubiera
+             * hecho— con sus ejercicios y su botón de empezar. Su portada le
+             * decía "Día 6, descanso" y esta pantalla le enseñaba otro día
+             * distinto: dos sitios de la misma app contando cosas diferentes
+             * sobre el mismo día, que es de las cosas que más hacen dudar de un
+             * plan.
+             *
+             * Abriendo el día que de verdad toca sale la tarjeta de descanso, y
+             * quien quiera entrenar igualmente solo tiene que tocar otro día en
+             * la tira de arriba, que sigue estando entera.
+             */
             const fallback = data.days.find((d) => !d.isRest) ?? data.days[0];
             setSelectedDayId(
               (prev) =>
-                prev ?? remoteFresh?.id ?? doneTodayDay?.id ?? session.day?.id ?? fallback.id
+                prev ??
+                remoteFresh?.id ??
+                doneTodayDay?.id ??
+                session.day?.id ??
+                session.diaDeHoy?.id ??
+                fallback.id
             );
           }
         }

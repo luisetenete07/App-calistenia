@@ -191,5 +191,61 @@ console.log('\nLos otros modos siguen igual');
     /diasRepetidos\.has\(day\.weekday\)/.test(editor) && /Otro día del plan cae en el mismo día/.test(editor));
 }
 
+console.log('\nUn día de descanso sigue teniendo nombre');
+{
+  /*
+   * EL FALLO QUE ESTO CIERRA
+   *
+   * "A un alumno le pone que es día 6 de descanso en la pantalla principal, y
+   * cuando entra en la pestaña de entrenamiento le sale día 3 de
+   * entrenamiento".
+   *
+   * La cuenta del ciclo estaba bien en las dos: lo que fallaba era qué día ABRÍA
+   * la pantalla de entreno. `day` se pone a null cuando toca descansar —y así
+   * debe ser, para que nadie confunda un descanso con una sesión—, pero la
+   * pantalla no tenía entonces ningún día que abrir y se caía al primero de
+   * entrenar. Resultado: la portada decía descanso y el entreno enseñaba otro
+   * día cargado, con sus ejercicios y su botón de empezar.
+   *
+   * `diaDeHoy` responde a la otra pregunta: en qué día del plan estás, se
+   * entrene o no.
+   */
+  const r = ciclo({ cycleStartDate: masDias(HOY, -2) });
+  const s = resolveSessionFor(r, HOY);
+  ok('hoy toca descansar, así que no hay sesión', s.day === null && s.isRest === true);
+  ok('pero se sabe qué día del plan es', s.diaDeHoy?.name === 'Descanso', s.diaDeHoy?.name);
+  ok('y su etiqueta lo dice', s.cycleLabel === 'Día 3 de 3', s.cycleLabel);
+
+  // En un día de entrenar, los dos apuntan a lo mismo.
+  const entrena = resolveSessionFor(r, masDias(HOY, 1));
+  ok('en un día de entrenar, los dos son el mismo', entrena.day?.id === entrena.diaDeHoy?.id);
+
+  // Semanal: igual. Un día de la semana marcado como descanso por el coach.
+  const semanal = {
+    id: 'r9',
+    schedule: 'weekly',
+    days: [{ id: 'a', name: 'Empuje', weekday: 0 }, { id: 'z', name: 'Descanso', weekday: 1, isRest: true }],
+  };
+  let martes = HOY;
+  for (let i = 0; i < 7; i++) {
+    if (new Date(masDias(HOY, i)).getDay() === 2) { martes = masDias(HOY, i); break; }
+  }
+  const m = resolveSessionFor(semanal, martes);
+  ok('en semanal, el descanso también tiene nombre', m.isRest === true && m.diaDeHoy?.name === 'Descanso');
+
+  // Y sin plan no se inventa ninguno.
+  ok('sin rutina no hay día', resolveSessionFor(null, HOY).diaDeHoy === null);
+  ok('en Sensaciones tampoco', resolveSessionFor({ id: 'f', schedule: 'flex', days: [{ id: 'x' }] }, HOY).diaDeHoy === null);
+
+  /*
+   * Y que la pantalla de entreno lo USE: es donde se veía el fallo. Si vuelve a
+   * caerse al primer día de entrenar, el alumno vuelve a ver dos días distintos
+   * en dos pantallas de la misma app.
+   */
+  const entrenoTsx = readFileSync(new URL('../app/(client)/workout.tsx', import.meta.url), 'utf8');
+  ok('la pantalla de entreno abre el día que toca, aunque sea de descanso',
+    /session\.day\?\.id \?\?\s*\n?\s*session\.diaDeHoy\?\.id/.test(entrenoTsx));
+}
+
 console.log(fallos === 0 ? '\nTodo correcto ✔' : `\n${fallos} fallo(s)`);
 process.exit(fallos === 0 ? 0 : 1);

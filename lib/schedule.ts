@@ -37,6 +37,21 @@ export function nombreDelDia(nombre: string | undefined, indice: number): string
 export interface TodaySession {
   /** Día de rutina que toca hoy, o null si no hay ninguno programado. */
   day: RoutineDay | null;
+  /**
+   * El día del plan que le corresponde a hoy, SEA O NO de entrenar.
+   *
+   * `day` se pone a null cuando toca descansar, y eso está bien: es lo que
+   * pregunta casi todo el mundo —"¿qué entreno hoy?"— y así nadie confunde un
+   * descanso con una sesión. Pero deja fuera una pregunta distinta: "¿en qué
+   * día del plan estoy?", que en un día de descanso sigue teniendo respuesta.
+   *
+   * Sin ella, la pantalla de entreno no tenía forma de abrir el día que de
+   * verdad tocaba: se caía al primer día de entrenar, así que en un día de
+   * descanso el alumno veía cargado el Día 1 —o el último que hubiera hecho—
+   * mientras su portada le decía que hoy tocaba descansar. Dos pantallas
+   * diciendo cosas distintas sobre el mismo día.
+   */
+  diaDeHoy?: RoutineDay | null;
   /** true si hoy es un día de descanso (solo relevante si day es null o isRest). */
   isRest: boolean;
   /** true si hoy es un día de descanso OPCIONAL (el alumno decide, Día 7 TENA). */
@@ -91,13 +106,13 @@ export function resolveSessionFor(
   ciclo?: ContextoDelCiclo
 ): TodaySession {
   if (!routine || routine.days.length === 0) {
-    return { day: null, isRest: false, optionalRest: false };
+    return { day: null, diaDeHoy: null, isRest: false, optionalRest: false };
   }
 
   // Modo flexible ("Sensaciones"): no hay día programado; el alumno elige la
   // rutina cada día según cómo se encuentre.
   if (routine.schedule === 'flex') {
-    return { day: null, isRest: false, optionalRest: false };
+    return { day: null, diaDeHoy: null, isRest: false, optionalRest: false };
   }
 
   // Grease the groove: todos los días son el mismo día, y no se "empieza" una
@@ -105,7 +120,8 @@ export function resolveSessionFor(
   // primer día para que la pantalla sepa qué ejercicios tocan, y nunca es
   // descanso: el método vive de la repetición diaria.
   if (routine.schedule === 'gtg') {
-    return { day: routine.days[0] ?? null, isRest: false, optionalRest: false };
+    const suyo = routine.days[0] ?? null;
+    return { day: suyo, diaDeHoy: suyo, isRest: false, optionalRest: false };
   }
 
   if (routine.schedule === 'cycle') {
@@ -137,6 +153,7 @@ export function resolveSessionFor(
     const day = routine.days[idx] ?? null;
     return {
       day: day && !day.isRest ? day : null,
+      diaDeHoy: day,
       isRest: Boolean(day?.isRest),
       optionalRest: Boolean(day?.optionalRest),
       cycleLabel: frase`Día ${idx + 1} de ${routine.days.length}`,
@@ -150,10 +167,12 @@ export function resolveSessionFor(
   // Día de la semana marcado como descanso por el coach: el alumno descansa,
   // no registra nada y su racha no se ve afectada.
   if (todays?.isRest) {
-    return { day: null, isRest: true, optionalRest: false };
+    return { day: null, diaDeHoy: todays, isRest: true, optionalRest: false };
   }
+  const elDeHoy = todays ?? (usesWeekdays ? null : routine.days[0]);
   return {
-    day: todays ?? (usesWeekdays ? null : routine.days[0]),
+    day: elDeHoy,
+    diaDeHoy: elDeHoy,
     isRest: usesWeekdays && !todays,
     optionalRest: false,
   };
