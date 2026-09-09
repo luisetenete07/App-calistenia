@@ -23,14 +23,6 @@ import {
   textoDePasos,
   ultimosSieteDias,
 } from '../lib/pasos';
-import {
-  hayPermisoDePasos,
-  pasosDelResultado,
-  PERMISO_DE_PASOS,
-  porQueNoHaySalud,
-  rangoDelDia,
-  saludUtilizable,
-} from '../lib/pasosDeSalud';
 import { colors, fonts, radius, spacing, typography } from '../lib/theme';
 import type { UserProfile } from '../lib/types';
 
@@ -93,61 +85,27 @@ export function ContadorDePasos({
   };
 
   /**
-   * Los pasos de hoy según Health Connect, o `null` si no se puede.
-   *
-   * `null` significa "por aquí no hay nada que rascar, prueba otra cosa": el
-   * móvil no lo trae, no está actualizado, o el usuario no ha dado permiso. El
-   * que llama se cae entonces al sensor de siempre.
-   *
-   * Cero SÍ es un número: quiere decir que Health Connect existe, nos deja
-   * mirar, y hoy no hay pasos guardados. Confundir las dos cosas es lo que
-   * haría que un fallo de permisos pusiera el día a cero.
-   *
-   * El módulo se carga con `require` y dentro del try por lo mismo que el
-   * resto: en la web no existe, y una importación arriba del todo tumbaría la
-   * pantalla entera en vez de solo esta función.
-   */
-  const leerDeHealthConnect = async (enSilencio: boolean): Promise<number | null> => {
-    try {
-      const salud = require('react-native-health-connect');
-      await salud.initialize();
-      const estado = await salud.getSdkStatus();
-      if (!saludUtilizable(estado)) {
-        if (!enSilencio) showToast(porQueNoHaySalud(estado));
-        return null;
-      }
-      /*
-       * Se piden los permisos aunque ya estén dados: si lo están, Health
-       * Connect contesta que sí sin enseñar nada, así que esto no molesta en
-       * las lecturas automáticas.
-       */
-      const concedidos = await salud.requestPermission([PERMISO_DE_PASOS]);
-      if (!hayPermisoDePasos(concedidos)) {
-        if (!enSilencio) {
-          showToast('Sin permiso en Health Connect no se pueden leer tus pasos.');
-        }
-        return null;
-      }
-      const res = await salud.aggregateRecord({
-        recordType: 'Steps',
-        timeRangeFilter: rangoDelDia(inicioDelDia(Date.now()), Date.now()),
-      });
-      return pasosDelResultado(res);
-    } catch {
-      // Cualquier cosa rara aquí no puede dejar sin pasos a nadie: se devuelve
-      // `null` y el que llama se cae al sensor.
-      return null;
-    }
-  };
-
-  /**
    * Lee del contador del teléfono.
    *
    * En iPhone se le pregunta al propio teléfono por el día entero, con la app
-   * cerrada incluida. En Android eso lo tiene Health Connect y no el sensor, así
-   * que se prueba ahí PRIMERO; solo si el móvil no lo trae se cae al sensor,
-   * que únicamente cuenta con la app delante y por eso se suma en vez de
-   * sustituir.
+   * cerrada incluida: esa cifra es la buena y sustituye a lo que hubiera.
+   *
+   * EN ANDROID NO HAY EQUIVALENTE, Y NO ES UN DESCUIDO
+   *
+   * Los pasos del día entero en Android viven en Health Connect, y leerlos
+   * exige el permiso `READ_STEPS`, que Google trata como dato de salud y
+   * revisa a mano. Se implementó, se envió, y la revisión lo tumbó: no
+   * consideró que la app tuviera una función que justificara ese permiso.
+   *
+   * Se podía pelear —sacar el contador a la portada, grabar un vídeo de
+   * demostración, otra ronda de revisión— o quitarlo y publicar. Para lo que
+   * da de sí (ahorrarle a alguien escribir un número al día) no compensaba
+   * tener la app parada, así que se quitó entero: el módulo, el permiso y la
+   * declaración.
+   *
+   * Lo que queda en Android es el sensor, que solo cuenta con la app delante y
+   * por eso SUMA en vez de sustituir, y escribir la cifra a mano. Escribirla a
+   * mano no es el plan B: mucha gente lleva reloj y su cifra buena está ahí.
    */
   const leerDelTelefono = async ({ enSilencio = false } = {}) => {
     if (Platform.OS === 'web') {
@@ -157,40 +115,6 @@ export function ContadorDePasos({
     }
     setLeyendo(true);
     try {
-      /*
-       * ANDROID: HEALTH CONNECT PRIMERO, Y ANTES DE TOCAR EL SENSOR
-       *
-       * Es el almacén de salud del sistema y el único sitio de Android donde
-       * están los pasos del día ENTERO: los que cuenta el teléfono con la app
-       * cerrada, más los del reloj o de otra app. `expo-sensors` no puede
-       * dárnoslos —contesta "not supported"— y solo sabe contar mientras UDECA
-       * está delante.
-       *
-       * Va antes que nada a propósito. Si se preguntara después, un móvil sin
-       * sensor de pasos, o cuyo dueño no diera el permiso de actividad, se
-       * quedaría sin leer nada aunque Health Connect tuviera el día entero
-       * guardado: se habría salido por el `return` de arriba.
-       */
-      if (Platform.OS === 'android') {
-        const pasosDeSalud = await leerDeHealthConnect(enSilencio);
-        if (pasosDeSalud !== null) {
-          if (pasosDeSalud === 0) {
-            // Cero no es un éxito: o no se ha andado, o no hay nada guardado.
-            if (!enSilencio) {
-              showToast('Health Connect no tiene pasos guardados de hoy todavía.');
-            }
-            return;
-          }
-          const aGuardar = pasosAGuardar(hoy, pasosDeSalud, { acumulativo: false });
-          // En la lectura automática, si no cambia nada no se escribe: cada
-          // escritura hace recargar la pantalla entera al padre.
-          if (enSilencio && aGuardar === (hoy?.steps ?? 0)) return;
-          await guardar(aGuardar, 'telefono');
-          if (!enSilencio) showToast(frase`Traídos ${conMiles(pasosDeSalud)} pasos de tu móvil`);
-          return;
-        }
-      }
-
       const Pedometer = require('expo-sensors').Pedometer;
       if (!(await Pedometer.isAvailableAsync())) {
         if (!enSilencio) showToast('Este móvil no tiene contador de pasos');
@@ -238,8 +162,12 @@ export function ContadorDePasos({
       }
 
       /*
-       * Sin Health Connect, lo único que hay es escuchar el sensor, y ese solo
-       * cuenta mientras la app está delante.
+       * ANDROID: SOLO EL SENSOR, Y SOLO CON LA APP DELANTE
+       *
+       * `expo-sensors` no sabe dar los pasos de un día entero en Android —el
+       * módulo contesta literalmente "Getting step count for date range is not
+       * supported on Android yet"—, así que lo único que hay es escuchar el
+       * sensor mientras UDECA está abierta.
        *
        * Se escucha un momento y lo andado se SUMA a lo que ya hubiera, porque
        * sustituirlo borraría la mañana de quien abre UDECA por la tarde. Y se
@@ -264,7 +192,7 @@ export function ContadorDePasos({
         // día como si viniera del teléfono.
         if (!enSilencio) {
           showToast(
-            'Sin Health Connect, Android solo cuenta los pasos con la app abierta. Instálalo desde Google Play, o escribe tus pasos a mano.'
+            'En Android los pasos solo se cuentan con la app abierta. Escribe los del día a mano y quedan guardados igual.'
           );
         }
         return;
@@ -426,7 +354,14 @@ export function ContadorDePasos({
               : origen === 'telefono'
                 ? Platform.OS === 'ios'
                   ? 'Se leen solos de tu iPhone'
-                  : 'Se leen solos de este móvil'
+                  /*
+                   * En Android se dice lo que de verdad pasa: el sensor cuenta
+                   * mientras la app está delante. "Se leen solos de este móvil"
+                   * daba a entender que contaba con la app cerrada —eso lo hacía
+                   * Health Connect, que ya no está— y quien saliera a andar sin
+                   * abrir UDECA volvería creyendo que el contador falla.
+                   */
+                  : 'Se cuentan con la app abierta'
                 : 'Los escribes tú'}
           </Text>
           <Pressable onPress={() => setCambiando(true)} hitSlop={8}>

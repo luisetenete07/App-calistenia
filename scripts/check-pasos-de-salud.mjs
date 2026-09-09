@@ -1,43 +1,38 @@
 /*
- * Los pasos del móvil en Android, con la app cerrada.
+ * Los pasos, SIN datos de salud. Y que no vuelvan por la puerta de atrás.
  *
- * DE DÓNDE SALE ESTO
+ * QUÉ PASÓ
  *
- * En iPhone la app pregunta al teléfono por el día entero y ya estaba. En
- * Android no había manera: `expo-sensors` contesta literalmente "Getting step
- * count for date range is not supported on Android yet", así que solo se podía
- * escuchar el sensor mientras UDECA estaba delante. Quien abría la app a las
- * ocho de la tarde tenía, para nosotros, los pasos de esos cuatro segundos.
+ * Para dar en Android los pasos del día entero —con la app cerrada— hay que
+ * leerlos de Health Connect, y eso exige `android.permission.health.READ_STEPS`,
+ * que Google trata como dato de salud y revisa a mano. Se implementó, se envió
+ * con la declaración de apps de salud rellenada, y la revisión lo tumbó:
  *
- * Ahora se leen de Health Connect, el almacén de salud del sistema. Lo que se
- * protege aquí son las cuatro formas de romperlo sin que salte ningún error:
+ *   "Los siguientes permisos de Salud conectada no parecen necesarios para las
+ *    funciones que ofrece actualmente tu aplicación: Steps"
  *
- *  - Confundir CERO con NO SÉ. Cero es "hoy no has andado" y se guarda; nada es
- *    "no me lo han dicho", y guardarlo pondría el día a cero por un fallo de
- *    permisos.
- *  - Dar por bueno un permiso que no es. `requestPermission` devuelve lo
- *    concedido, no lo pedido: si el usuario dice que no, la lista vuelve vacía
- *    y hay que enterarse.
- *  - Preguntar a Health Connect DESPUÉS del sensor. Un móvil sin sensor de
- *    pasos se salía por el `return` de arriba y nunca llegaba a preguntar,
- *    aunque Health Connect tuviera el día entero guardado.
- *  - Quedarse sin declarar los permisos en el manifiesto, que es lo que hace
- *    que la petición falle en silencio.
+ * No era que pidiéramos de más —se pedía UN permiso y ninguno más— sino que el
+ * revisor no encontró la función: el contador de pasos vive dentro de Progreso,
+ * en la pestaña de Nutrición y hacia abajo, y una cuenta recién creada no tiene
+ * ni entrenador ni plan con los que llegar hasta ahí.
+ *
+ * La decisión fue quitarlo. Para lo que da de sí —ahorrarle a alguien escribir
+ * un número al día— no compensaba tener la publicación parada en revisiones.
+ *
+ * QUÉ VIGILA ESTE GUARDIÁN
+ *
+ * Que no vuelva sin querer. Un permiso de salud que reaparezca en el manifiesto
+ * —por reinstalar el módulo, por copiar y pegar de una rama vieja— no se nota
+ * al probar la app: se nota semanas después, cuando Play rechaza la versión y
+ * el lanzamiento se para otra vez.
+ *
+ * Y que lo que SÍ queda siga en pie: el contador con el sensor, la lectura del
+ * día entero en iPhone, y la cifra a mano, que no es el plan B —mucha gente
+ * lleva reloj y su cifra buena está ahí—.
  *
  *   node --experimental-strip-types --import ./scripts/_ts-hook.mjs scripts/check-pasos-de-salud.mjs
  */
-import { readFileSync } from 'node:fs';
-import {
-  hayPermisoDePasos,
-  pasosDelResultado,
-  PERMISO_DE_PASOS,
-  porQueNoHaySalud,
-  rangoDelDia,
-  SALUD_DISPONIBLE,
-  SALUD_HAY_QUE_ACTUALIZARLA,
-  SALUD_NO_DISPONIBLE,
-  saludUtilizable,
-} from '../lib/pasosDeSalud.ts';
+import { existsSync, readFileSync } from 'node:fs';
 
 let fallos = 0;
 const ok = (n, c, porQue = '') => {
@@ -45,141 +40,106 @@ const ok = (n, c, porQue = '') => {
   console.log(`  ${c ? '✔' : '✖'} ${n}${!c && porQue ? ` — ${porQue}` : ''}`);
 };
 const lee = (ruta) => readFileSync(new URL(`../${ruta}`, import.meta.url), 'utf8');
+const hay = (ruta) => existsSync(new URL(`../${ruta}`, import.meta.url));
 
-console.log('\nCuándo se puede usar Health Connect');
-{
-  ok('disponible, sí', saludUtilizable(SALUD_DISPONIBLE));
-  ok('sin instalar, no', !saludUtilizable(SALUD_NO_DISPONIBLE));
-  ok('desactualizado, tampoco', !saludUtilizable(SALUD_HAY_QUE_ACTUALIZARLA));
-  // Lo que no es ninguno de los tres tampoco vale: un `undefined` colándose
-  // como "disponible" acabaría en una excepción tres líneas después.
-  ok('cualquier otra cosa, no', !saludUtilizable(undefined) && !saludUtilizable('3'));
-
-  /*
-   * Y cada caso con su salida. "No se han podido leer los pasos" a secas deja a
-   * la persona sin saber si el fallo es suyo, del móvil o nuestro.
-   */
-  ok('si hay que actualizarlo, se dice', /Actualiza Health Connect/.test(porQueNoHaySalud(SALUD_HAY_QUE_ACTUALIZARLA)));
-  ok('si no lo tiene, se ofrece la salida', /a mano/.test(porQueNoHaySalud(SALUD_NO_DISPONIBLE)));
-}
-
-console.log('\nEl permiso: se mira lo CONCEDIDO, no lo pedido');
-{
-  ok('solo se pide leer los pasos',
-    PERMISO_DE_PASOS.accessType === 'read' && PERMISO_DE_PASOS.recordType === 'Steps');
-  ok('con el permiso, sí', hayPermisoDePasos([{ accessType: 'read', recordType: 'Steps' }]));
-  // Si el usuario dice que no, la lista vuelve vacía. Ese es el caso real.
-  ok('sin nada concedido, no', !hayPermisoDePasos([]));
-  // Permiso de otra cosa no es permiso de pasos.
-  ok('otro dato no vale', !hayPermisoDePasos([{ accessType: 'read', recordType: 'Weight' }]));
-  // Poder ESCRIBIR pasos no es poder leerlos.
-  ok('escribir no es leer', !hayPermisoDePasos([{ accessType: 'write', recordType: 'Steps' }]));
-  ok('una respuesta rara no se da por buena', !hayPermisoDePasos(undefined) && !hayPermisoDePasos('sí'));
-}
-
-console.log('\nCero y "no sé" no son lo mismo');
-{
-  ok('un número se lee', pasosDelResultado({ COUNT_TOTAL: 8432 }) === 8432);
-  // Cero es un dato: hoy no se ha andado.
-  ok('el cero es un dato', pasosDelResultado({ COUNT_TOTAL: 0 }) === 0);
-  /*
-   * Y todo lo demás es "no sé". Devolver cero aquí es lo que pondría el día a
-   * cero cuando lo que ha fallado es la lectura.
-   */
-  ok('sin respuesta, no sé', pasosDelResultado(undefined) === null);
-  ok('sin el campo, no sé', pasosDelResultado({}) === null);
-  ok('un texto no es un número', pasosDelResultado({ COUNT_TOTAL: '8432' }) === null);
-  ok('ni un negativo', pasosDelResultado({ COUNT_TOTAL: -3 }) === null);
-  ok('los decimales se redondean', pasosDelResultado({ COUNT_TOTAL: 8432.6 }) === 8433);
-}
-
-console.log('\nEl día que se pregunta');
-{
-  const desde = Date.UTC(2026, 8, 5, 0, 0, 0);
-  const hasta = Date.UTC(2026, 8, 5, 20, 30, 0);
-  const r = rangoDelDia(desde, hasta);
-  ok('es un rango cerrado', r.operator === 'between');
-  ok('en el formato que pide', r.startTime === '2026-09-05T00:00:00.000Z' && r.endTime === '2026-09-05T20:30:00.000Z');
-}
-
-console.log('\nEstá enganchado, y en el orden correcto');
-{
-  const c = lee('components/ContadorDePasos.tsx');
-  ok('se lee de Health Connect', /leerDeHealthConnect/.test(c));
-  /*
-   * ANTES del sensor. Si se preguntara después, un móvil sin contador de pasos
-   * —o cuyo dueño niegue el permiso de actividad— se saldría por el `return` de
-   * `isAvailableAsync` sin llegar a preguntar nunca.
-   */
-  ok('se pregunta antes que al sensor',
-    c.indexOf('leerDeHealthConnect(enSilencio)') < c.indexOf("require('expo-sensors')"),
-    'el sensor decide antes, y un móvil sin sensor se queda sin pasos');
-  // Solo en Android: en iPhone ya se leía el día entero y no hay que tocarlo.
-  ok('solo en Android', /Platform\.OS === 'android'/.test(c));
-  // Un fallo aquí no puede dejar sin pasos a nadie: se cae al sensor.
-  ok('si falla, se cae al sensor', /catch \{[\s\S]{0,200}?return null;/.test(c));
-}
-
-console.log('\nY declarado donde Android lo mira');
+console.log('\nNi un permiso de salud en el manifiesto');
 {
   const app = JSON.parse(lee('app.json')).expo;
   const permisos = app.android?.permissions ?? [];
-  // Sin declararlo, la petición de permiso falla en silencio: no se puede pedir
-  // lo que no está en el manifiesto.
-  ok('el permiso de pasos está declarado', permisos.includes('android.permission.health.READ_STEPS'));
+  const deSalud = permisos.filter((p) => /permission\.health\./i.test(p));
+  ok('ningún android.permission.health.*', deSalud.length === 0, deSalud.join(', '));
+
   /*
-   * Y el de actividad, que faltaba desde siempre. Sin él,
-   * `Pedometer.requestPermissionsAsync()` devuelve que no en Android 10 y
-   * posteriores — o sea, que el contador del sensor tampoco había funcionado
-   * nunca.
+   * El de ACTIVIDAD FÍSICA sí, y hace falta. No es un dato de salud de los que
+   * revisa Google: es el permiso normal de Android para leer el sensor de
+   * pasos, y sin él `Pedometer.requestPermissionsAsync()` devuelve que no en
+   * Android 10 y posteriores. Faltaba desde siempre, así que el contador del
+   * sensor no había funcionado nunca en un Android moderno.
    */
-  ok('y el de actividad, que faltaba', permisos.includes('android.permission.ACTIVITY_RECOGNITION'));
+  ok('el de actividad física se queda', permisos.includes('android.permission.ACTIVITY_RECOGNITION'));
 
   const plugins = (app.plugins ?? []).map((p) => (Array.isArray(p) ? p[0] : p));
-  ok('el módulo está enchufado', plugins.includes('react-native-health-connect'));
+  ok('el módulo de Health Connect no está enchufado', !plugins.includes('react-native-health-connect'));
+
   /*
-   * Health Connect exige Android 8 (API 26) y Expo trae 24 por defecto. Sin
-   * subirlo, la compilación de Android falla entera.
+   * EL MÍNIMO DE ANDROID SE QUEDA EN 26, AUNQUE YA NO HAGA FALTA
+   *
+   * Se subió a 26 porque Health Connect lo exigía. Al quitarlo, la tentación es
+   * devolverlo al valor de Expo, pero eso no quita nada: AÑADE los móviles con
+   * Android 7, que no han ejecutado esta app en su vida. Las versiones 1.0.6 a
+   * 1.0.9 ya se publicaron con 26, así que bajarlo ahora es estrenar terreno
+   * nuevo en mitad de un lanzamiento a cambio de un puñado de móviles de 2016.
+   *
+   * Se puede bajar cuando haya calma y alguien pueda probarlo. Hasta entonces,
+   * esto es una decisión, no un olvido.
    */
   const props = (app.plugins ?? []).find((p) => Array.isArray(p) && p[0] === 'expo-build-properties');
-  ok('y el mínimo de Android sube a 26', props?.[1]?.android?.minSdkVersion === 26, JSON.stringify(props?.[1]));
-
-  /*
-   * Y con tope de versión. Es un módulo NATIVO y el SDK de Expo no lo gestiona,
-   * así que el `^` que pone npm por defecto autorizaría cualquier versión mayor
-   * futura — o sea, una app que deja de arrancar sin que nadie la haya tocado.
-   * Es exactamente lo que ya pasó con gesture-handler y la 3.0.
-   */
-  const version = JSON.parse(lee('package.json')).dependencies['react-native-health-connect'];
-  ok('sin rango que se abra solo', typeof version === 'string' && !version.startsWith('^'), version);
+  ok('el mínimo de Android sigue en 26, a propósito',
+    props?.[1]?.android?.minSdkVersion === 26, JSON.stringify(props?.[1]));
 }
 
+console.log('\nNi rastro del módulo en el proyecto');
+{
+  const pkg = JSON.parse(lee('package.json'));
+  const dependencias = { ...pkg.dependencies, ...pkg.devDependencies };
+  ok('no está instalado', !('react-native-health-connect' in dependencias));
+  ok('y su parte de lógica se fue con él', !hay('lib/pasosDeSalud.ts'));
 
-console.log('\nY contado en la política de privacidad');
+  const contador = lee('components/ContadorDePasos.tsx');
+  ok('el contador ya no lo llama', !/react-native-health-connect/.test(contador));
+  /*
+   * El porqué se queda escrito donde se toma la decisión. Sin eso, dentro de
+   * seis meses alguien ve que en Android los pasos solo cuentan con la app
+   * abierta, lo toma por un olvido, y vuelve a meter el permiso.
+   */
+  ok('y explica por qué no lo usa', /revisión lo tumbó|la revisión no lo aceptó/i.test(contador));
+}
+
+console.log('\nLo que sí hay, sigue funcionando');
+{
+  const contador = lee('components/ContadorDePasos.tsx');
+  // iPhone: el día entero, con la app cerrada incluida. Eso no lo toca esto.
+  ok('en iPhone se sigue leyendo el día entero', /getStepCountAsync/.test(contador));
+  // Android: el sensor, y lo andado se SUMA a lo que ya hubiera del día.
+  ok('en Android se escucha el sensor', /watchStepCount/.test(contador));
+  ok('y lo andado se suma, no sustituye', /acumulativo: true/.test(contador));
+  // Y a mano, que es lo que hace que esto funcione para quien lleva reloj.
+  ok('y se puede escribir a mano', /'mano'/.test(contador));
+  // Sin prometer lo que ya no se hace.
+  ok('no se manda a nadie a instalar Health Connect', !/Instálalo desde Google Play/.test(contador));
+  /*
+   * Y sin dar a entender que cuenta con la app cerrada. "Se leen solos de este
+   * móvil" era verdad con Health Connect; sin él, quien salga a andar sin abrir
+   * UDECA vuelve creyendo que el contador está roto.
+   */
+  ok('en Android se dice que cuenta con la app abierta',
+    /'Se cuentan con la app abierta'/.test(contador) && !/'Se leen solos de este móvil'/.test(contador));
+}
+
+console.log('\nY la política de privacidad dice lo que la app hace HOY');
 {
   /*
-   * Google TUMBA la declaración de datos de salud si la política enlazada no
-   * menciona Health Connect y qué se hace con lo que se lee. Y es de las cosas
-   * que se quedan viejas sin que salte nada: el código lee pasos y el texto
-   * sigue hablando de lo de antes.
+   * Esto es lo que Google lee. Una política que siga hablando de Health Connect
+   * cuando la app ya no lo usa es una contradicción con la declaración de datos,
+   * y es de las cosas que se quedan viejas sin que salte nada.
    *
-   * Está en DOS sitios —la web pública y la pantalla de dentro de la app— y las
-   * dos tienen que decir lo mismo: la de la web es la que ve Google, la de la
-   * app es la que ve el usuario.
+   * Está en DOS sitios: la web pública —la que ve Google— y la pantalla de
+   * dentro de la app, que es la que ve el usuario. Las dos tienen que decir lo
+   * mismo.
    */
   for (const [ruta, quien] of [
     ['web/privacidad.html', 'la de la web, que es la que mira Google'],
     ['app/privacy-policy.tsx', 'la de dentro de la app'],
   ]) {
     const t = lee(ruta);
-    ok(`${quien}: nombra Health Connect`, /Health Connect/.test(t));
-    ok(`${quien}: dice que solo se leen los pasos`, /pasos/i.test(t) && /[Ss]olo leemos|no escribe/.test(t));
-    // Lo que Google mira con lupa: que no se venda ni se use para publicidad.
-    ok(`${quien}: descarta publicidad y venta`, /publicidad/i.test(t) && /(vende|comparte con terceros)/i.test(t));
-    // Y cómo se corta, que es el derecho que tiene que poder ejercer.
+    ok(`${quien}: ya no promete leer de Health Connect`,
+      !/(a través de|through)[^.]{0,40}Health Connect/i.test(t));
+    ok(`${quien}: dice que en Android NO se usa`, /[Nn]o usamos Health Connect|do not[\s\S]{0,20}use Health Connect/.test(t));
+    ok(`${quien}: sigue diciendo qué se lee`, /pasos|steps/i.test(t));
+    // Lo que Google mira con lupa y sigue siendo verdad.
+    ok(`${quien}: descarta publicidad y venta`, /publicidad|advertising/i.test(t) && /(vende|sold|comparte con terceros)/i.test(t));
     ok(`${quien}: dice cómo retirar el permiso`, /retirar el permiso|withdraw the permission/i.test(t));
   }
-  // La fecha es lo que dice si la política cubre lo que la app hace HOY.
   ok('la fecha está al día', /Última actualización: septiembre/.test(lee('web/privacidad.html')));
 }
 

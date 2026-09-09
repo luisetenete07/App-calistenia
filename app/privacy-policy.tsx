@@ -45,23 +45,26 @@ export default function PrivacyPolicy() {
         comerciales.
       </Section>
 
-      <Section title="3. El contador de pasos (Health Connect y Salud)">
-        Si activas el contador de pasos, UDECA lee los pasos que ya guarda tu propio teléfono: en
-        Android a través de <Text style={styles.bold}>Health Connect</Text> y en iPhone a través de
-        la app <Text style={styles.bold}>Salud</Text>. Es opcional: la app funciona igual sin ello, y
-        siempre puedes escribir tus pasos a mano.{'\n\n'}
+      <Section title="3. El contador de pasos">
+        Si activas el contador de pasos, UDECA lee los pasos que cuenta tu propio teléfono. Es
+        opcional: la app funciona igual sin ello, y siempre puedes escribir tus pasos a mano.
+        {'\n\n'}
         • <Text style={styles.bold}>Qué leemos:</Text> únicamente el número de pasos del día en
         curso. Nada más: ni ritmo cardiaco, ni sueño, ni entrenamientos, ni ubicación.{'\n'}
-        • <Text style={styles.bold}>Solo leemos:</Text> UDECA no escribe ni modifica nada en Health
-        Connect ni en Salud.{'\n'}
+        • <Text style={styles.bold}>En iPhone:</Text> se le piden a la app{' '}
+        <Text style={styles.bold}>Salud</Text> los pasos del día, y solo eso. UDECA no escribe ni
+        modifica nada en Salud.{'\n'}
+        • <Text style={styles.bold}>En Android:</Text> los cuenta el sensor del móvil mientras
+        tienes UDECA abierta. No usamos Health Connect ni ningún otro almacén de datos de salud.
+        {'\n'}
         • <Text style={styles.bold}>Dónde acaba:</Text> la cifra diaria se guarda en tu cuenta para
         calcular tu gasto calórico y tu objetivo de pasos. La veis tu entrenador y tú, nadie más.
         {'\n'}
         • <Text style={styles.bold}>Para qué NO se usa:</Text> ni para publicidad, ni se vende, ni se
         comparte con terceros.{'\n'}
         • <Text style={styles.bold}>Cómo se corta:</Text> puedes retirar el permiso cuando quieras
-        desde los ajustes de Health Connect (Android) o de Salud (iPhone), sin perder el resto de la
-        app. Al borrar tu cuenta se borran también los pasos guardados.
+        desde los ajustes de tu móvil (Salud en iPhone, Actividad física en Android), sin perder el
+        resto de la app. Al borrar tu cuenta se borran también los pasos guardados.
       </Section>
 
       <Section title="4. Pagos (Stripe)">

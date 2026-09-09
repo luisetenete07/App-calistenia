@@ -14,12 +14,13 @@ import { conMiles } from './texto';
  *
  * - En iPhone se leen del contador del propio teléfono (el mismo que alimenta
  *   Salud), incluido lo andado con la app cerrada.
- * - En Android se leen de Health Connect, el almacén de salud del sistema, que
- *   sí guarda el día entero con la app cerrada (ver lib/pasosDeSalud.ts). En un
- *   móvil que no lo tenga, lo único que queda es el sensor mientras la app está
- *   delante, y entonces la cifra se SUMA a lo que ya hubiera del día en vez de
- *   sustituirlo: si se contara solo lo de la app abierta, abrir UDECA a las
- *   ocho de la tarde borraría el día entero.
+ * - En Android los cuenta el sensor MIENTRAS LA APP ESTÁ DELANTE, y por eso la
+ *   cifra se SUMA a lo que ya hubiera del día en vez de sustituirlo: si se
+ *   contara solo lo de la app abierta, abrir UDECA a las ocho de la tarde
+ *   borraría el día entero. Los pasos del día completo en Android viven en
+ *   Health Connect, que exige un permiso de datos de salud que Google revisa a
+ *   mano; se implementó, la revisión no lo aceptó, y se quitó entero antes que
+ *   tener la app parada por él (ver components/ContadorDePasos.tsx).
  * - Y siempre se puede escribir a mano, que es lo que hace que esto funcione
  *   para quien lleva un reloj o usa otra app.
  */

@@ -1455,7 +1455,7 @@ export const EN: Record<string, string> = {
   'De mi iPhone': 'From my iPhone',
   'De este móvil': 'From this phone',
   'Se leen solos de tu iPhone': 'Read automatically from your iPhone',
-  'Se leen solos de este móvil': 'Read automatically from this phone',
+  'Se cuentan con la app abierta': 'Counted while the app is open',
   'Los escribes tú': 'You type them in',
   'Cambiar': 'Change',
   'Puedes cambiarlo cuando quieras. Lo que ya está apuntado no se toca.':

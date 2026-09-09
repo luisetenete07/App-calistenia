@@ -7,7 +7,7 @@
       "entrenadores.app",
       "com.udeca.app"
     ],
-    "version": "1.0.9",
+    "version": "1.0.10",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -27,8 +27,7 @@
     "android": {
       "package": "entrenadores.app",
       "permissions": [
-        "android.permission.ACTIVITY_RECOGNITION",
-        "android.permission.health.READ_STEPS"
+        "android.permission.ACTIVITY_RECOGNITION"
       ],
       "blockedPermissions": [
         "android.permission.READ_MEDIA_IMAGES",
@@ -73,8 +72,7 @@
             "minSdkVersion": 26
           }
         }
-      ],
-      "react-native-health-connect"
+      ]
     ],
     "experiments": {
       "typedRoutes": true
