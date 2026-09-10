@@ -41,9 +41,27 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
+      # Tres horas de espera, no una.
+      #
+      # Este paso NO compila: manda el trabajo a EAS y se queda esperando a que
+      # las máquinas de Expo lo saquen de la cola. Con el tope en 60 minutos, el
+      # 9 de septiembre GitHub se cansó de esperar y marcó la compilación en
+      # rojo... mientras el trabajo seguía vivo en EAS y acababa bien. El mismo
+      # día, la de iOS —que no lleva tope y espera lo que haga falta— tardó 97
+      # minutos y salió en verde.
+      #
+      # O sea: un rojo que no era un fallo, y un .aab que estaba hecho y que
+      # nadie fue a buscar. Peor todavía, invita a relanzar la compilación, y
+      # cada relanzamiento gasta créditos de EAS por nada.
+      #
+      # La cola se alarga cuando quedan pocos créditos del plan gratuito (los
+      # trabajos gratis van detrás de los de pago), así que esto va a pasar más
+      # a menudo, no menos. El tope sigue existiendo para que un cuelgue de
+      # verdad no se coma el runner, pero ya no se mete en medio de una espera
+      # normal.
       - name: Compilar en EAS
         if: ${{ !inputs.en_el_runner }}
-        timeout-minutes: 60
+        timeout-minutes: 180
         run: eas build --platform android --profile production --non-interactive
 
       # La imagen de ubuntu-latest ya trae el SDK de Android y el JDK, así que
