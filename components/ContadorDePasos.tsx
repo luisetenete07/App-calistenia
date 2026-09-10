@@ -73,6 +73,24 @@ export function ContadorDePasos({
   const cargar = onCambio;
 
   const hoy = pasosDeHoy(registros);
+  /*
+   * LO MISMO, PERO EN UNA REFERENCIA. Y no es un capricho.
+   *
+   * `registros` es una lista NUEVA cada vez que el padre recarga, aunque los
+   * pasos sean los mismos. La lectura automática la necesita para saber qué hay
+   * guardado hoy, y mientras dependió de ella se montó este tiovivo:
+   *
+   *   leer el sensor → guardar → el padre recarga → lista nueva → leer otra vez
+   *
+   * Cada vuelta escribía en Firestore y repintaba la pantalla entera. Desde
+   * fuera se ve exactamente como lo contó quien lo sufrió: "parpadea mucho y te
+   * tira de la app".
+   *
+   * Con la referencia, la lectura sigue viendo el dato fresco —se actualiza en
+   * cada pintado— pero ya no es motivo para volver a leer.
+   */
+  const registrosRef = useRef(registros);
+  registrosRef.current = registros;
   const objetivo = profile.stepGoal ?? OBJETIVO_POR_DEFECTO;
   const p = progresoDePasos(hoy?.steps ?? 0, objetivo);
   const semana = ultimosSieteDias(registros);
@@ -152,10 +170,11 @@ export function ContadorDePasos({
           }
           return;
         }
-        const aGuardar = pasosAGuardar(hoy, leidos, { acumulativo: false });
+        const deHoy = pasosDeHoy(registrosRef.current);
+        const aGuardar = pasosAGuardar(deHoy, leidos, { acumulativo: false });
         // En la lectura automática, si no cambia nada no se escribe: cada
         // escritura hace recargar la pantalla entera al padre.
-        if (enSilencio && aGuardar === (hoy?.steps ?? 0)) return;
+        if (enSilencio && aGuardar === (deHoy?.steps ?? 0)) return;
         await guardar(aGuardar, 'telefono');
         if (!enSilencio) showToast(frase`Traídos ${conMiles(leidos)} pasos de tu iPhone`);
         return;
@@ -197,7 +216,10 @@ export function ContadorDePasos({
         }
         return;
       }
-      await guardar(pasosAGuardar(hoy, contados, { acumulativo: true }), 'telefono');
+      await guardar(
+        pasosAGuardar(pasosDeHoy(registrosRef.current), contados, { acumulativo: true }),
+        'telefono'
+      );
       if (!enSilencio) {
         showToast(frase`Sumados ${conMiles(contados)} pasos andados con la app abierta`);
       }
@@ -245,10 +267,18 @@ export function ContadorDePasos({
   const leerSiToca = useCallback(() => {
     if (origen !== 'telefono' || Platform.OS === 'web') return;
     leerDelTelefono({ enSilencio: true }).catch(() => {});
-    // `leerDelTelefono` se recrea en cada pintado y meterlo aquí dispararía el
-    // efecto sin parar; lo que de verdad decide es el origen.
+    /*
+     * SOLO EL ORIGEN. Ni `leerDelTelefono` ni `registros`.
+     *
+     * `leerDelTelefono` se recrea en cada pintado, así que meterlo aquí
+     * dispararía el efecto sin parar. Y `registros` era peor todavía, porque
+     * cerraba el círculo: leer acaba guardando, guardar hace recargar al padre,
+     * y el padre devuelve una lista nueva que volvía a disparar la lectura.
+     * Los pasos de hoy se miran ahora por referencia (`registrosRef`), que da
+     * el dato fresco sin ser un motivo para volver a leer.
+     */
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [origen, registros]);
+  }, [origen]);
 
   useEffect(() => {
     leerSiToca();

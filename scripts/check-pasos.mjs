@@ -8,6 +8,7 @@
  *
  *   node --experimental-strip-types --import ./scripts/_ts-hook.mjs scripts/check-pasos.mjs
  */
+import { readFileSync } from 'node:fs';
 import {
   balanceDelDia,
   caloriasDePasos,
@@ -151,8 +152,10 @@ console.log('\nSe conecta UNA VEZ y se lee solo');
   comprueba('solo si está conectado al móvil', /if \(origen !== 'telefono'/.test(contador));
   // Una lectura que nadie ha pedido no puede llenar la pantalla de avisos.
   comprueba('la lectura automática va en silencio', /enSilencio: true/.test(contador));
+  // (El dato de hoy se lee de la referencia, no de la prop: ver más abajo, en
+  // "La lectura automática no puede llamarse a sí misma".)
   comprueba('y no escribe si el número no cambia',
-    /if \(enSilencio && aGuardar === \(hoy\?\.steps \?\? 0\)\) return;/.test(contador));
+    /if \(enSilencio && aGuardar === \(deHoy\?\.steps \?\? 0\)\) return;/.test(contador));
   // Y se puede cambiar de fuente cuando se quiera.
   comprueba('se puede cambiar de fuente', /setCambiando\(true\)/.test(contador));
   // Escribirlos a mano sigue estando con el móvil conectado: se sale a andar
@@ -229,6 +232,44 @@ console.log('\nDe dónde sale el presupuesto');
   comprueba('y de dónde salen las de más', /por andar/.test(conPasos), conPasos);
   const sinPasos = textoDelBalance(balanceDelDia(2000, 1450, 0));
   comprueba('sin pasos no habla de andar', !/andar/.test(sinPasos), sinPasos);
+}
+
+console.log('\nLa lectura automática no puede llamarse a sí misma');
+{
+  /*
+   * EL TIOVIVO
+   *
+   * "En la sección de nutrición, al rehacer la ficha nutricional, parpadea
+   * mucho y te tira de la app".
+   *
+   * El contador de pasos lee solo cuando se abre la pantalla, y esa lectura
+   * dependía de `registros`: la lista de pasos que le pasa el padre. Pero el
+   * padre devuelve una lista NUEVA cada vez que recarga, aunque los pasos sean
+   * los mismos. Y leer acaba guardando, y guardar hace recargar al padre:
+   *
+   *   leer el sensor → guardar → el padre recarga → lista nueva → leer otra vez
+   *
+   * Cada vuelta escribía en Firestore y repintaba la pantalla entera, con una
+   * escucha del sensor de cuatro segundos por medio. Guardar los macros
+   * arrancaba justo eso —refresca el perfil, el perfil hace recargar al padre—,
+   * que es por lo que se notaba al rehacer la ficha.
+   *
+   * Lo que esto vigila: que la lectura dependa SOLO del origen, y que los pasos
+   * de hoy se miren por referencia, que da el dato fresco sin ser un motivo
+   * para volver a leer.
+   */
+  const c = readFileSync(new URL('../components/ContadorDePasos.tsx', import.meta.url), 'utf8');
+
+  const deps = /const leerSiToca = useCallback\([\s\S]*?\}, \[([^\]]*)\]\);/.exec(c)?.[1] ?? '(no se encuentra)';
+  comprueba('la lectura automática solo depende del origen', deps.trim() === 'origen', deps);
+  comprueba('los pasos de hoy se miran por referencia', /registrosRef\.current/.test(c));
+  comprueba('y la referencia se mantiene fresca', /registrosRef\.current = registros/.test(c));
+  /*
+   * Y que no se cuele por otro lado: si `leerDelTelefono` entrara en las
+   * dependencias, el efecto se dispararía en cada pintado, que es la misma
+   * enfermedad con otro nombre.
+   */
+  comprueba('ni depende de la función que lee', !/\[origen, leerDelTelefono\]/.test(c));
 }
 
 console.log(fallos === 0 ? '\nTodo correcto ✔' : `\n${fallos} fallo(s)`);
