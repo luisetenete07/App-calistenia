@@ -74,6 +74,85 @@ export function youTubeEmbedUrl(id: string): string {
   return `https://www.youtube-nocookie.com/embed/${id}?rel=0&modestbranding=1&playsinline=1`;
 }
 
+/**
+ * EL ORIGEN QUE SE LE PRESTA AL REPRODUCTOR EN EL MÓVIL.
+ *
+ * EL ERROR 153, CONTADO ENTERO
+ *
+ * En el móvil el reproductor iba en un WebView que NAVEGABA directamente a la
+ * dirección del embed. Eso, para YouTube, no es una página que incrusta un
+ * vídeo: es alguien abriendo el reproductor a pelo, sin `Referer` y sin origen.
+ * Y su reproductor incrustado exige saber quién lo incrusta.
+ *
+ * Lo que se ve cuando falta es exactamente esto, y no es un rectángulo negro
+ * —es peor, porque parece nuestro—:
+ *
+ *     Error de configuración del reproductor de vídeo
+ *     Error 153
+ *
+ * con dos botones suyos, "Ver vídeo en YouTube" y "Más información", que
+ * además no hacían nada porque el guardián de navegación los bloqueaba. Un
+ * error ajeno dentro de nuestra app, con dos botones muertos.
+ *
+ * La solución es la de siempre para un WebView: en vez de navegar al embed, se
+ * carga una página NUESTRA —cuatro líneas— con el embed en un `iframe`, y se
+ * le dice al WebView que esa página vive en `https://www.youtube.com`. Con eso
+ * la petición del iframe sale con su `Referer` en regla y el reproductor se
+ * configura.
+ *
+ * NO ES LO MISMO QUE EL BLINDAJE QUE SE RINDIÓ, y conviene dejarlo escrito
+ * para que nadie vuelva a atar los dos cabos equivocados. Aquel montaba
+ * también una página con origen prestado, sí, pero además necesitaba que la
+ * API de YouTube CONTESTARA por `postMessage` para quitar el cristal de
+ * encima; eso es lo que nunca llegó a funcionar dentro de un WebView. Aquí no
+ * hay API, ni cristal, ni mensajes: hay un `iframe` y nada más. Lo único que
+ * tiene que pasar es que cargue.
+ */
+export const ORIGEN_DE_YOUTUBE = 'https://www.youtube.com';
+
+/** ¿Es este embed de YouTube (o de su dominio sin cookies)? */
+export function esEmbedDeYouTube(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '');
+    return (
+      host === 'youtube.com' ||
+      host === 'youtube-nocookie.com' ||
+      host.endsWith('.youtube.com') ||
+      host.endsWith('.youtube-nocookie.com')
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * La página mínima que envuelve el embed para dárselo al WebView con origen.
+ *
+ * El `origin` va también DENTRO de la dirección del embed: es lo que el
+ * reproductor compara con quien lo incrusta, y los dos tienen que decir lo
+ * mismo que el `baseUrl` con el que se carga esta página.
+ *
+ * Sin `overflow: hidden` y con el iframe a pantalla completa, en Android
+ * aparece una franja blanca debajo del vídeo en cuanto el WebView decide que
+ * hay algo que desplazar.
+ */
+export function paginaDeEmbed(embedUrl: string): string {
+  const src = conOrigenDeYouTube(embedUrl);
+  const atributo = src.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  return `<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<style>html,body{margin:0;padding:0;height:100%;background:#000;overflow:hidden}
+iframe{display:block;border:0;width:100%;height:100%}</style></head>
+<body><iframe src="${atributo}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe></body></html>`;
+}
+
+/** Le pega el `origin` al embed, si no lo lleva ya. */
+function conOrigenDeYouTube(embedUrl: string): string {
+  if (embedUrl.includes('origin=')) return embedUrl;
+  const sep = embedUrl.includes('?') ? '&' : '?';
+  return `${embedUrl}${sep}origin=${encodeURIComponent(ORIGEN_DE_YOUTUBE)}`;
+}
+
 
 /*
  * LA MINIATURA LA PONE LA PLATAFORMA

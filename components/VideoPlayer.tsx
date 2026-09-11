@@ -1,9 +1,12 @@
 import React from 'react';
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { Text } from './Texto';
 import { Ionicons } from '@expo/vector-icons';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import {
+  esEmbedDeYouTube,
+  ORIGEN_DE_YOUTUBE,
+  paginaDeEmbed,
   parseVimeoUrl,
   parseYouTubeId,
   seQuedaDentro,
@@ -306,11 +309,26 @@ function VideoEnWebView({
   }
 
   const { WebView } = require('react-native-webview');
+  /*
+   * YOUTUBE SE CARGA DENTRO DE UNA PÁGINA NUESTRA, NO NAVEGANDO A ÉL.
+   *
+   * Navegar al embed deja al reproductor sin saber quién lo incrusta, y lo que
+   * contesta entonces es su propio "Error de configuración del reproductor de
+   * vídeo · Error 153". El porqué entero está en lib/video.ts.
+   *
+   * Solo YouTube. Vimeo y cualquier otro enlace (Drive, Dropbox) siguen
+   * cargándose a pelo, que es lo que funciona hoy: meterlos en un iframe con un
+   * origen prestado sería arriesgarse a que el suyo lo rechace por nada.
+   */
+  const deYouTube = esEmbedDeYouTube(embedUrl);
+  const fuente = deYouTube
+    ? { html: paginaDeEmbed(embedUrl), baseUrl: ORIGEN_DE_YOUTUBE }
+    : { uri: embedUrl };
   return (
     <View style={styles.video}>
       <WebView
         key={intento}
-        source={{ uri: embedUrl }}
+        source={fuente}
         onError={() => setFallo(true)}
         /*
          * Solo si falla la PÁGINA. En Android esto salta también por cualquier
@@ -329,7 +347,26 @@ function VideoEnWebView({
         // app de YouTube por su cuenta, sin pasar por la comprobación de abajo.
         setSupportMultipleWindows={false}
         javaScriptCanOpenWindowsAutomatically={false}
-        onShouldStartLoadWithRequest={(req: { url: string }) => seQuedaDentro(req.url, embedUrl)}
+        /*
+         * Lo que NO se puede cargar aquí dentro, según de qué vídeo sea.
+         *
+         * En un curso se bloquea y se acabó: esa clase no puede acabar abierta
+         * en la app de YouTube, a la vista de cualquiera.
+         *
+         * En un vídeo de TÉCNICA, bloquear y no hacer nada más era dejar un
+         * botón muerto. Son vídeos públicos del canal, y si el reproductor de
+         * dentro falla, lo que tiene delante el alumno es el aviso de YouTube
+         * con su "Ver vídeo en YouTube"... que no respondía. Ahora ese toque
+         * abre el vídeo fuera: no es lo ideal, pero es ver la técnica en vez de
+         * quedarse mirando un error.
+         */
+        onShouldStartLoadWithRequest={(req: { url: string }) => {
+          if (seQuedaDentro(req.url, embedUrl)) return true;
+          if (!protectedContent && /^https?:/i.test(req.url)) {
+            Linking.openURL(req.url).catch(() => {});
+          }
+          return false;
+        }}
         // Contenido de curso: fuera el menú de mantener pulsado (copiar el
         // enlace, compartir) y la vista previa 3D Touch, que son las dos
         // formas de sacar la dirección del vídeo sin salir de la app.

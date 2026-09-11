@@ -28,7 +28,13 @@
  *   node --experimental-strip-types --import ./scripts/_ts-hook.mjs scripts/check-video-movil.mjs
  */
 import { readFileSync } from 'node:fs';
-import { seQuedaDentro, seQuedaDentroDelBlindaje } from '../lib/video.ts';
+import {
+  esEmbedDeYouTube,
+  ORIGEN_DE_YOUTUBE,
+  paginaDeEmbed,
+  seQuedaDentro,
+  seQuedaDentroDelBlindaje,
+} from '../lib/video.ts';
 import { ESPERA_MS, fuenteBlindada } from '../lib/reproductorBlindado.ts';
 
 let fallos = 0;
@@ -234,6 +240,77 @@ console.log('\nUn vídeo que no carga lo dice, en vez de quedarse negro');
   // Y un vídeo distinto empieza de cero: lo que falló con uno no tiene por qué
   // fallar con el siguiente.
   ok('un vídeo nuevo empieza limpio', /useEffect\(\(\) => setFallo\(false\), \[embedUrl\]\)/.test(p));
+}
+
+// =========================================================================
+console.log('\nEl reproductor de YouTube sabe quién lo incrusta (error 153)');
+// =========================================================================
+/*
+ * Navegar directamente al embed deja al reproductor sin `Referer` ni origen, y
+ * lo que contesta entonces es su propio "Error de configuración del reproductor
+ * de vídeo · Error 153" dentro de nuestra app, con dos botones suyos que además
+ * no respondían. Se arregla cargando una página nuestra con el embed en un
+ * iframe y prestándole el origen de YouTube.
+ */
+{
+  const pagina = paginaDeEmbed(EMBED);
+  ok('el embed va dentro de un iframe', /<iframe src="/.test(pagina), pagina.slice(0, 80));
+  ok(
+    'y lleva el origen puesto',
+    pagina.includes(`origin=${encodeURIComponent(ORIGEN_DE_YOUTUBE)}`),
+    'sin él, el reproductor no sabe quién lo incrusta'
+  );
+  // Ni un solo & suelto dentro del atributo: uno sin escapar corta la
+  // dirección y el iframe acaba cargando otra cosa (o nada).
+  {
+    const src = (pagina.match(/<iframe src="([^"]*)"/) ?? [])[1] ?? '';
+    ok(
+      'los & de la dirección van escapados',
+      src.length > 0 && !/&(?!amp;)/.test(src),
+      src
+    );
+  }
+  // Dos orígenes distintos serían el mismo error con más pasos.
+  ok('el origen es el mismo que el prestado', ORIGEN_DE_YOUTUBE === 'https://www.youtube.com');
+  ok('no se le pega dos veces', paginaDeEmbed(`${EMBED}&origin=x`).split('origin=').length === 2);
+
+  ok('reconoce el dominio sin cookies', esEmbedDeYouTube(EMBED));
+  ok('y el normal', esEmbedDeYouTube('https://www.youtube.com/embed/ID'));
+  // Vimeo y los demás siguen cargándose a pelo: meterlos en un iframe con un
+  // origen prestado sería arriesgarse a que el suyo lo rechace por nada.
+  ok('pero no Vimeo', !esEmbedDeYouTube('https://player.vimeo.com/video/1'));
+  ok('ni un enlace cualquiera', !esEmbedDeYouTube('https://drive.google.com/file/d/1/preview'));
+
+  const comp = readFileSync(new URL('../components/VideoPlayer.tsx', import.meta.url), 'utf8');
+  ok(
+    'el WebView carga la página, no el embed',
+    /source=\{fuente\}/.test(comp) && /paginaDeEmbed\(embedUrl\)/.test(comp),
+    'con source={{uri: embedUrl}} vuelve el 153'
+  );
+  ok(
+    'y solo para YouTube',
+    /const deYouTube = esEmbedDeYouTube\(embedUrl\)/.test(comp)
+  );
+}
+
+// =========================================================================
+console.log('\nY si aun así falla, el alumno no se queda con un botón muerto');
+// =========================================================================
+{
+  const comp = readFileSync(new URL('../components/VideoPlayer.tsx', import.meta.url), 'utf8');
+  ok(
+    'un vídeo de técnica que se sale, se abre fuera',
+    /if \(!protectedContent && \/\^https\?:\/i\.test\(req\.url\)\) \{/.test(comp),
+    'era un "Ver vídeo en YouTube" que no hacía nada'
+  );
+  ok(
+    'pero una clase de curso NO',
+    /if \(seQuedaDentro\(req\.url, embedUrl\)\) return true;/.test(comp) &&
+      comp.includes('!protectedContent'),
+    'esa clase no puede acabar abierta en la app de YouTube'
+  );
+  // Y los esquemas propios siguen sin abrirse nunca: abren la app de YouTube.
+  ok('los esquemas propios se quedan fuera', !seQuedaDentro('vnd.youtube://ID', EMBED));
 }
 
 console.log(fallos === 0 ? '\nTodo correcto ✔' : `\n${fallos} fallo(s)`);

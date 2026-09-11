@@ -128,6 +128,47 @@ ok(
   /<Sheet\s+visible=\{formOpen\}/.test(panel)
 );
 
+// =========================================================================
+console.log('\n4 · Y lo que se calcula, se ve');
+// =========================================================================
+/*
+ * "Funciona bien el proceso pero no se rehace con los nuevos datos aplicados".
+ *
+ * Con un plan del entrenador activo, lo que calcula el alumno SÍ se guarda
+ * —comprobado contra la base de datos— pero mandaba el del coach y lo suyo no
+ * salía por ninguna parte. Desde fuera eso es indistinguible de que no se haya
+ * guardado nada, y encima el aviso decía "Macros actualizados" mientras la
+ * pantalla enseñaba los mismos números de antes.
+ *
+ * Quién manda no cambia: el plan del coach. Lo que cambia es que lo del alumno
+ * existe a la vista y que el aviso dice la verdad.
+ */
+ok(
+  'con plan del coach, el aviso no promete que hayan cambiado los del día',
+  /En tu día sigue mandando el plan de tu entrenador/.test(panel),
+  'decir "Macros actualizados" sin que cambie nada en pantalla es lo que parecía un fallo'
+);
+ok(
+  'y sin plan del coach, sigue siendo el de siempre',
+  /: 'Macros actualizados'/.test(panel)
+);
+ok(
+  'lo calculado por el alumno se enseña',
+  /Lo que has calculado tú/.test(panel)
+);
+ok(
+  'solo cuando manda el del coach (si no, ya son los del día)',
+  /targets\.fromCoach && nt \?/.test(panel)
+);
+ok(
+  'con sus cuatro cifras',
+  /nt\.dailyCalories.*nt\.proteinG.*nt\.carbsG.*nt\.fatG/s.test(panel)
+);
+ok(
+  'y diciendo qué pasa con ellos',
+  /pasan a ser tus objetivos del día/.test(panel)
+);
+
 console.log(
   fallos === 0 ? '\n✔ La ficha nutricional se está quieta' : `\n${fallos} fallo(s)`
 );

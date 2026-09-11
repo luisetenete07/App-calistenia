@@ -186,7 +186,20 @@ export function PanelDeNutricion() {
         nutritionTargets: { ...result, goal, updatedAt: Date.now() },
       });
       await refreshProfile();
-      showToast('Macros actualizados');
+      /*
+       * EL AVISO TIENE QUE DECIR LO QUE HA PASADO DE VERDAD.
+       *
+       * Con un plan del entrenador activo, lo calculado se guarda en la ficha
+       * pero NO cambia los objetivos del día: manda el del coach, y eso está
+       * decidido a propósito. Lo que no valía era decir "Macros actualizados" y
+       * dejar la pantalla con los mismos números de antes: quien lo ve concluye,
+       * con razón, que la app no ha guardado nada.
+       */
+      showToast(
+        plan
+          ? 'Guardados en tu ficha. En tu día sigue mandando el plan de tu entrenador.'
+          : 'Macros actualizados'
+      );
     } catch {
       showToast('No se pudieron guardar los macros');
     }
@@ -335,6 +348,32 @@ export function PanelDeNutricion() {
               <Text style={styles.recalcPista}>
                 Mientras tu entrenador tenga un plan activo, manda el suyo.
               </Text>
+            ) : null}
+
+            {/*
+              LO QUE HA CALCULADO EL ALUMNO, A LA VISTA.
+              
+              Hasta ahora, rehacer la ficha teniendo plan del entrenador se
+              guardaba en la cuenta y no se veía en ninguna parte. Desde fuera
+              es indistinguible de que no se haya guardado, y así llegó el
+              aviso: "el proceso va bien pero no se aplica".
+              
+              Manda el plan del coach, eso no cambia. Pero lo calculado existe,
+              es del alumno y ahora se ve al lado, que además es la información
+              que hace útil el ejercicio: ver de un vistazo cuánto se separa lo
+              que su cuerpo pide hoy de lo que le pusieron.
+            */}
+            {targets.fromCoach && nt ? (
+              <View style={styles.tuyos}>
+                <Text style={styles.tuyosTitulo}>Lo que has calculado tú</Text>
+                <Text style={styles.tuyosCifras}>
+                  {conMiles(nt.dailyCalories)} kcal · P{nt.proteinG} · C{nt.carbsG} · G{nt.fatG}
+                </Text>
+                <Text style={styles.tuyosPie}>
+                  Se queda guardado en tu ficha. Si tu entrenador retira su plan,
+                  pasan a ser tus objetivos del día.
+                </Text>
+              </View>
             ) : null}
           </>
         )}
@@ -653,6 +692,30 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   recalcText: { ...typography.small, color: colors.primary, fontFamily: fonts.semiBold },
+  // Los macros del alumno cuando manda el plan del coach: presentes pero en
+  // segundo plano, que es exactamente su papel.
+  tuyos: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+    backgroundColor: colors.surfaceAlt,
+  },
+  tuyosTitulo: {
+    ...typography.label,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  tuyosCifras: {
+    ...typography.body,
+    color: colors.text,
+    fontFamily: fonts.semiBold,
+    marginTop: 2,
+    ...tabularNums,
+  },
+  tuyosPie: { ...typography.small, color: colors.textFaint, marginTop: spacing.xs },
   zoomBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.92)',
