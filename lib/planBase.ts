@@ -17,25 +17,72 @@ import type { UserProfile } from './types';
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Días de prueba de una cuenta de atleta.
+ * Días de prueba del atleta. HERENCIA: solo para las cuentas de antes.
  *
- * Son 28 y no 7 ni 14 porque en calistenia un mes es lo que tarda en verse
- * algo: un mesociclo entero, con su progresión y su semana de descarga. Con
- * dos semanas la decisión de pagar se toma justo cuando el trabajo empieza a
- * dar resultados, que es el peor momento posible para pedirla.
- *
- * Este número está también en firestore.rules, que impide pedir más prueba de
- * la que toca al crear la cuenta. Si lo cambias, cámbialo en los dos sitios.
+ * Con el modelo nuevo no hay prueba —se paga el primer año al entrar— pero
+ * este número no se puede borrar: hay cuentas con una prueba en marcha, y está
+ * escrito también en firestore.rules, que impide pedir más prueba de la que
+ * toca al crear la cuenta. Mientras quede una sola cuenta vieja en pie, esto
+ * se queda.
  */
 export const TRIAL_DAYS = 28;
 
-/** Fecha de fin de la prueba para una cuenta de atleta que se crea ahora. */
+/** Fin de la prueba de una cuenta de atleta antigua. */
 export function trialUntil(from: number = Date.now()): number {
   return from + TRIAL_DAYS * DAY_MS;
 }
 
 /**
- * Alumnos incluidos en el alta de 1 € del entrenador.
+ * El primer año, que es lo que se compra al entrar.
+ *
+ * Antes esto eran 28 días de prueba del atleta y un alta simbólica de 1 €.
+ * Ahora la entrada ES el primer año: se paga una vez —27 € el entrenador, 17 €
+ * el atleta— y se entra doce meses enteros.
+ *
+ * El cambio no es de precio, es de promesa. Una prueba de 28 días obliga a
+ * decidir justo cuando el trabajo empieza a dar resultados, que es el peor
+ * momento para pedir una decisión. Un año por delante quita esa conversación
+ * del medio: el primer año se entrena, y la decisión llega cuando ya hay doce
+ * meses de progreso encima de la mesa para tomarla.
+ *
+ * Son 365 días y no "un año de calendario" a propósito: la cuenta se hace en
+ * días para que no dependa de en qué mes se dio de alta nadie.
+ */
+export const PRIMER_ANO_DIAS = 365;
+
+/** Hasta cuándo llega una cuenta que paga su primer año ahora. */
+export function primerAnoHasta(from: number = Date.now()): number {
+  return from + PRIMER_ANO_DIAS * DAY_MS;
+}
+
+/**
+ * Desde cuándo rige el modelo del primer año.
+ *
+ * Quien ya estaba dentro con las reglas viejas —el entrenador con sus cinco
+ * alumnos gratis para siempre, el atleta en sus 28 días de prueba— sigue con
+ * ellas. Cambiar las condiciones a mitad de partida y dejar fuera a quien ya
+ * había entrado es la forma más rápida de perder a los primeros, que son justo
+ * los que menos merecen perderse.
+ *
+ * Es la misma cautela que ya se tuvo con `ENTRY_REQUIRED_FROM`, y por el mismo
+ * motivo.
+ */
+export const PRIMER_ANO_DESDE = Date.parse('2026-09-11T00:00:00Z');
+
+/** ¿Se rige esta cuenta por el modelo nuevo (primer año de pago)? */
+export function conModeloDePrimerAno(profile: { createdAt?: number } | null): boolean {
+  return (profile?.createdAt ?? 0) >= PRIMER_ANO_DESDE;
+}
+
+/**
+ * Alumnos que caben en el plan de entrada del entrenador.
+ *
+ * Con el primer año pagado (27 €) el entrenador tiene la app entera y hasta
+ * cinco alumnos. Para pasar de ahí está el plan plus, que quita el tope.
+ *
+ * Cinco no es un número al azar: es el grupo con el que un entrenador
+ * comprueba si esto le sirve —suficiente para llevarlo de verdad, corto para
+ * que crecer se note— y es el mismo que ya tenían las cuentas anteriores.
  *
  * Este número vive en TRES sitios que no pueden importarse entre sí: aquí,
  * payments-webhook/api/join.js (el servidor, que es quien decide) y
@@ -182,23 +229,27 @@ export function subscriptionState(
 /**
  * ¿Le toca ya al ATLETA el aviso del plan a pantalla completa?
  *
- * Solo el último día de su prueba, y aquí está el porqué: el atleta acaba de
- * pagar. Ha puesto su euro hace cinco minutos y lo que ha comprado es
- * justamente un mes sin que le pidan nada más. Recibirlo con una pantalla
- * completa de "pásate al plan" es cobrar dos veces la misma conversación, y a
- * quien lo ve le queda la sensación de que el euro era el cebo.
+ * Solo el último día, y aquí está el porqué: el atleta acaba de pagar. Ha
+ * puesto su año hace cinco minutos y lo que ha comprado es justamente doce
+ * meses sin que le pidan nada más. Recibirlo con una pantalla completa de
+ * "renueva" es cobrar dos veces la misma conversación, y a quien lo ve le
+ * queda la sensación de que el precio de entrada era el cebo.
  *
  * El aviso tiene un momento en el que sí sirve: cuando queda un día y la
  * decisión es de verdad. Antes de eso no hay nada que decidir, y decirlo igual
  * solo enseña que la app está pendiente de cobrar en vez de entrenar.
  *
- * Que exista un sitio donde mirarlo durante todo ese mes no está reñido con
- * esto: la tarjeta del plan vive en el perfil desde el primer día, para quien
- * la busque. La diferencia entre estar disponible y salir a la cara es la
- * diferencia entre una oferta y una persecución.
+ * Que exista un sitio donde mirarlo durante todo ese tiempo no está reñido con
+ * esto: la tarjeta del plan vive en el perfil, y el aviso de las dos últimas
+ * semanas sale en un banner que no tapa nada. La diferencia entre estar
+ * disponible y salir a la cara es la diferencia entre una oferta y una
+ * persecución.
  *
- * El entrenador es otro caso y no pasa por aquí: su tope no es una fecha sino
- * las plazas de alumno, y esas se llenan cuando se llenan.
+ * Vale igual para el año pagado y para la prueba de las cuentas antiguas: lo
+ * que importa es que mañana se queda fuera, no cómo se llame el plazo.
+ *
+ * El entrenador es otro caso y no pasa por aquí: a él la tarjeta del plan le
+ * habla del tope de alumnos, y ese se llena cuando se llena.
  */
 export function tocaElAvisoDelAtleta(
   profile: UserProfile | null,
@@ -206,7 +257,7 @@ export function tocaElAvisoDelAtleta(
 ): boolean {
   if (profile?.role !== 'athlete') return false;
   const estado = subscriptionState(profile, now);
-  if (!estado.trial || estado.daysLeft === null) return false;
+  if (estado.daysLeft === null || !estado.active) return false;
   return estado.daysLeft <= 1;
 }
 
@@ -220,14 +271,53 @@ export function tocaElAvisoDelAtleta(
 export function trainerHasAccess(profile: UserProfile | null, now: number = Date.now()): boolean {
   if (!profile || profile.role !== 'trainer') return true;
   if (subscriptionState(profile, now).active) return true;
+  /*
+   * SIN AÑO PAGADO NO HAY CUENTA DE ENTRENADOR. Y esto cambió.
+   *
+   * Antes el entrenador entraba gratis para siempre mientras no pasara de
+   * cinco alumnos, y la cuota solo aparecía al crecer. Ahora el primer año se
+   * paga al entrar (27 €) y al terminar hay que renovar (180 €): sin eso, la
+   * cuenta de entrenador no se puede usar.
+   *
+   * Las cuentas ANTERIORES al cambio conservan lo suyo. Se les prometió cinco
+   * alumnos gratis para siempre y "para siempre" no puede durar hasta que
+   * cambie la lista de precios.
+   */
+  if (conModeloDePrimerAno(profile)) return false;
   return (profile.clientCount ?? 0) <= clientSlotsOf(profile);
 }
 
-/** true si el entrenador ya no puede sumar alumnos sin suscribirse. */
+/**
+ * ¿Se le han llenado las plazas de alumno?
+ *
+ * Con el modelo nuevo el tope NO depende de tener suscripción o no —el primer
+ * año ya está pagado— sino de QUÉ plan tiene: el de entrada trae cinco plazas
+ * y el plus las quita. Para las cuentas antiguas sigue valiendo lo de antes:
+ * suscripción activa, sin tope.
+ */
 export function trainerAtFreeLimit(profile: UserProfile | null, now: number = Date.now()): boolean {
   if (!profile || profile.role !== 'trainer') return false;
-  if (subscriptionState(profile, now).active) return false;
+  if (planIlimitado(profile)) return false;
+  if (!conModeloDePrimerAno(profile) && subscriptionState(profile, now).active) return false;
   return (profile.clientCount ?? 0) >= clientSlotsOf(profile);
+}
+
+/**
+ * ¿Tiene el plan que quita el tope de alumnos?
+ *
+ * Lo escribe el servidor al cobrar (`subscriptionPlan`), nunca la app: si la
+ * app pudiera decidirlo, bastaría con editar el perfil para tener alumnos
+ * ilimitados sin pagarlos. Las reglas de Firestore ya impiden que nadie se
+ * toque ese campo.
+ *
+ * `annual` es como Stripe nombra la suscripción anual del entrenador, que es
+ * la de 180 €: la misma que se puede contratar el primer año para quitarse el
+ * tope y la única que queda al renovar.
+ */
+export function planIlimitado(profile: UserProfile | null): boolean {
+  if (!profile) return false;
+  if (isAdmin(profile) || accesoIlimitado(profile)) return true;
+  return profile.subscriptionPlan === 'annual';
 }
 
 /**

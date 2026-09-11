@@ -30,7 +30,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // Copia de lib/planBase.ts: este script corre con `node` pelado, sin el gancho
 // que sabe leer TypeScript, así que no puede importarlo. Si cambia allí, aquí
 // también.
-const TRIAL_DAYS = 28;
+const PRIMER_ANO_DIAS = 365;
 /**
  * Contraseña de las cuentas de prueba.
  *
@@ -136,8 +136,13 @@ async function main() {
   const athleteUid = await ensureUser(athleteEmail, 'Atleta de prueba');
   const clientUid = await ensureUser(clientEmail, 'Alumno de prueba');
 
-  // COACH: nace sin suscripción (0 = caducada). Entra igual porque el plan
-  // gratuito cubre hasta FREE_CLIENT_LIMIT alumnos.
+  // COACH: con su primer año pagado, que es lo que compra quien entra.
+  //
+  // Antes nacía con la suscripción a 0 y entraba igual, porque el plan gratuito
+  // cubría hasta cinco alumnos. Con el modelo del primer año eso ya no vale: una
+  // cuenta de entrenador sin año pagado ve el muro, y esta es la cuenta que se
+  // le entrega a quien revisa la app en Apple y en Google. Un revisor que se
+  // encuentra un muro de pago rechaza la versión, y con razón.
   await db.collection('users').doc(coachUid).set({
     uid: coachUid,
     role: 'trainer',
@@ -146,7 +151,8 @@ async function main() {
     createdAt: now,
     inviteCode: INVITE_CODE,
     emailVerificationRequired: false,
-    subscriptionUntil: 0,
+    entryPaidAt: now,
+    subscriptionUntil: now + PRIMER_ANO_DIAS * DAY_MS,
     clientCount: 1,
   });
   await db.collection('trainerCodes').doc(INVITE_CODE).set({
@@ -154,7 +160,7 @@ async function main() {
     full: false,
   });
 
-  // ATLETA: es su propio entrenador y entra con la prueba en marcha.
+  // ATLETA: es su propio entrenador y entra con su primer año pagado.
   await db.collection('users').doc(athleteUid).set({
     uid: athleteUid,
     role: 'athlete',
@@ -163,8 +169,8 @@ async function main() {
     createdAt: now,
     trainerId: athleteUid,
     emailVerificationRequired: false,
-    subscriptionUntil: now + TRIAL_DAYS * DAY_MS,
-    trialEndsAt: now + TRIAL_DAYS * DAY_MS,
+    entryPaidAt: now,
+    subscriptionUntil: now + PRIMER_ANO_DIAS * DAY_MS,
   });
 
   // ALUMNO: ya vinculado al coach, sin pasar por solicitud ni aprobación.

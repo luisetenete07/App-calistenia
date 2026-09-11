@@ -38,7 +38,10 @@ const PATRONES = [
   // Un importe en euros escrito a mano en el texto de una pantalla.
   { re: /\d+\s*€|€\s*\d|EUR\s*\d/, que: 'un importe' },
   // Las constantes de precio de la plataforma no pintan nada en una pantalla.
-  { re: /ANNUAL_PRICE_EUR|COACH_MONTHLY_EQUIV_EUR|ATHLETE_MONTHLY_EUR|ENTRY_PRICE_EUR/, que: 'una constante de precio' },
+  {
+    re: /ANNUAL_PRICE_EUR|ATHLETE_ANNUAL_EUR|COACH_FIRST_YEAR_EUR|ATHLETE_FIRST_YEAR_EUR|COACH_MONTHLY_EQUIV_EUR|ATHLETE_MONTHLY_EQUIV_EUR|COACH_FIRST_YEAR_MONTHLY_EUR|ATHLETE_FIRST_YEAR_MONTHLY_EUR|AHORRO_PRIMER_ANO_/,
+    que: 'una constante de precio',
+  },
   // "Gratis" tampoco: el alumno no le paga a UDECA, pero sí a su entrenador.
   { re: /\bgratis\b/i, que: '"gratis"' },
 ];

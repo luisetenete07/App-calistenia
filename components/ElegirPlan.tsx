@@ -2,10 +2,8 @@ import React from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from './Texto';
-import { frase } from '../lib/idioma';
 import { track } from '../lib/analytics';
 import {
-  AHORRO_ANUAL_PCT,
   CAN_LINK_TO_PAYMENT,
   subscriptionCheckoutUrl,
 } from '../lib/subscription';
@@ -13,13 +11,13 @@ import type { UserProfile } from '../lib/types';
 import { colors, fonts, radius, spacing, typography } from '../lib/theme';
 
 /**
- * Las dos formas que tiene un atleta de pagar: el año o mes a mes.
+ * Cómo se paga un año de UDECA.
  *
- * POR QUÉ ES UN COMPONENTE Y NO DOS BOTONES SUELTOS
+ * POR QUÉ ES UN COMPONENTE Y NO UN BOTÓN SUELTO
  *
- * Esta elección sale en dos sitios —el muro de cuando se acaba la prueba y la
- * tarjeta del plan en el perfil— y son los dos únicos momentos en los que se le
- * pide dinero a un atleta. Duplicar los textos era garantizar que un día se
+ * Sale en dos sitios —el muro de cuando se acaba el acceso y la tarjeta del
+ * plan en el perfil— y son los dos únicos momentos en los que se le pide
+ * dinero a un atleta. Duplicar los textos era garantizar que un día se
  * mejorara uno y el otro se quedara diciendo otra cosa.
  *
  * POR QUÉ NO HAY NINGÚN PRECIO AQUÍ
@@ -28,18 +26,15 @@ import { colors, fonts, radius, spacing, typography } from '../lib/theme';
  * lib/subscription.ts. El importe se ve en la página de pago, que es donde
  * está al día siempre.
  *
- * La única cifra es el AHORRO, en porcentaje, y no es una excepción a esa
- * regla: un precio se queda viejo en la versión que el usuario no actualiza,
- * pero una proporción entre los dos precios sigue siendo verdad mientras los
- * dos se muevan juntos. Y va calculada (`AHORRO_ANUAL_PCT`), no escrita.
+ * POR QUÉ YA NO HAY DOS OPCIONES
  *
- * POR QUÉ EL ANUAL VA PRIMERO Y MARCADO
+ * Había mensual y anual, y el anual salía marcado con su ahorro. Con el modelo
+ * del primer año eso sobra: se entra pagando un año entero y se sigue pagando
+ * por años. No hay nada que elegir, así que no se finge una elección.
  *
- * Porque es el que le conviene a las dos partes, y eso se puede decir sin
- * trampa: el atleta paga menos por el mismo año, y a UDECA le entra por
- * delante lo que de otro modo dependería de doce cobros que pueden fallar.
- * Lo que NO se hace es esconder el mensual ni ponerlo feo: quien no quiera
- * comprometerse a un año tiene su opción a la vista y con las mismas letras.
+ * Una pantalla que ofrece dos caminos cuando solo hay uno no es más amable:
+ * es más lenta, y deja al que la lee buscando la diferencia entre dos cosas
+ * que son la misma.
  */
 
 interface Props {
@@ -65,53 +60,35 @@ export function ElegirPlan({ profile, nota }: Props) {
    *
    * Con la guarda dentro, el componente es seguro se use donde se use.
    */
-  const anual = CAN_LINK_TO_PAYMENT ? subscriptionCheckoutUrl(profile, 'annual') : null;
-  const mensual = CAN_LINK_TO_PAYMENT ? subscriptionCheckoutUrl(profile, 'monthly') : null;
+  const anual = CAN_LINK_TO_PAYMENT ? subscriptionCheckoutUrl(profile) : null;
 
-  // Sin enlaces configurados no se enseña nada: un botón de pagar que no lleva
-  // a ninguna parte es peor que no tener botón.
-  if (!anual && !mensual) return null;
+  // Sin enlace configurado no se enseña nada: un botón de pagar que no lleva a
+  // ninguna parte es peor que no tener botón.
+  if (!anual) return null;
 
-  const abrir = (url: string | null, plan: 'annual' | 'monthly') => {
+  const esEntrenador = profile?.role === 'trainer';
+
+  const abrir = (url: string | null) => {
     if (!url) return;
-    void track(plan === 'annual' ? 'checkout_start_anual' : 'checkout_start');
+    void track('checkout_start_anual');
     Linking.openURL(url).catch(() => {});
   };
 
   return (
     <View style={styles.caja}>
-      {anual ? (
-        <Pressable style={[styles.opcion, styles.destacada]} onPress={() => abrir(anual, 'annual')}>
-          <View style={styles.insignia}>
-            <Text style={styles.insigniaTexto}>
-              {frase`Ahorras un ${AHORRO_ANUAL_PCT}%`}
+      <Pressable style={[styles.opcion, styles.destacada]} onPress={() => abrir(anual)}>
+        <View style={styles.fila}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.titulo}>Un año por delante</Text>
+            <Text style={styles.detalle}>
+              {esEntrenador
+                ? 'Tu grupo sin tope de alumnos y la app entera, doce meses. Se paga una vez.'
+                : 'Lo pagas una vez y te olvidas del contador hasta el año que viene.'}
             </Text>
           </View>
-          <View style={styles.fila}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.titulo}>Un año por delante</Text>
-              <Text style={styles.detalle}>
-                Lo pagas una vez y te olvidas del contador hasta el año que viene.
-              </Text>
-            </View>
-            <Ionicons name="arrow-forward" size={18} color={colors.primary} />
-          </View>
-        </Pressable>
-      ) : null}
-
-      {mensual ? (
-        <Pressable style={styles.opcion} onPress={() => abrir(mensual, 'monthly')}>
-          <View style={styles.fila}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.titulo}>Mes a mes</Text>
-              <Text style={styles.detalle}>
-                Sin permanencia. Lo dejas el mes que quieras, sin dar explicaciones.
-              </Text>
-            </View>
-            <Ionicons name="arrow-forward" size={18} color={colors.textMuted} />
-          </View>
-        </Pressable>
-      ) : null}
+          <Ionicons name="arrow-forward" size={18} color={colors.primary} />
+        </View>
+      </Pressable>
 
       {nota !== null ? (
         <Text style={styles.pie}>
@@ -131,25 +108,10 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     backgroundColor: colors.surface,
   },
-  // La destacada se distingue por el borde y la insignia, no por un color de
-  // fondo chillón: el resto de la app es negra y sobria, y un bloque de color
-  // aquí se leería como publicidad metida con calzador.
+  // Se distingue por el borde y nada más: el resto de la app es negra y
+  // sobria, y un bloque de color aquí se leería como publicidad metida con
+  // calzador.
   destacada: { borderColor: colors.primary },
-  insignia: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.primary,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    marginBottom: spacing.sm,
-  },
-  insigniaTexto: {
-    ...typography.label,
-    color: colors.background,
-    fontFamily: fonts.semiBold,
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-  },
   fila: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   titulo: { ...typography.body, color: colors.text, fontFamily: fonts.semiBold },
   detalle: { ...typography.small, color: colors.textMuted, marginTop: 2 },

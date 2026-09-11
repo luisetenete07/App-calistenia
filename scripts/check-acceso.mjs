@@ -14,12 +14,15 @@ import {
   CUENTAS_ILIMITADAS,
   DAY_MS,
   ENTRY_REQUIRED_FROM,
+  FREE_CLIENT_LIMIT,
+  PRIMER_ANO_DESDE,
   accesoIlimitado,
   hasPlatformAccess,
   isAdmin,
   needsEntryPayment,
   PAGOS_ACTIVOS,
   subscriptionState,
+  trainerAtFreeLimit,
 } from '../lib/planBase.ts';
 
 let fallos = 0;
@@ -134,6 +137,87 @@ console.log('\nLos que nunca pagan');
 
   comprueba('sin perfil no se rompe nada', hasPlatformAccess(null) && !needsEntryPayment(null));
   comprueba('sin correo, tampoco', !accesoIlimitado(atleta({ email: undefined })));
+}
+
+console.log('\nEl entrenador del modelo nuevo: el primer año se paga');
+{
+  /*
+   * LO QUE CAMBIÓ, Y POR QUÉ HAY QUE VIGILARLO
+   *
+   * Antes el entrenador entraba gratis para siempre mientras no pasara de
+   * cinco alumnos. Ahora paga su primer año al entrar (27 €) y renueva al
+   * terminarlo (180 €); sin eso, la cuenta de entrenador no se usa.
+   *
+   * Y hay una trampa fácil de caer: durante ese primer año TIENE suscripción
+   * vigente, porque la ha pagado. Si el tope de alumnos siguiera atado a "tener
+   * suscripción" —como estaba—, cualquiera recién dado de alta tendría alumnos
+   * ilimitados por 27 € y los 180 € no los pagaría nadie. Lo que quita el tope
+   * es el PLAN.
+   */
+  const NUEVO = PRIMER_ANO_DESDE + 5 * DAY_MS;
+  const coach = (extra = {}) => ({
+    uid: 't2',
+    role: 'trainer',
+    email: 'coach@ejemplo.test',
+    name: 'Coach',
+    createdAt: NUEVO,
+    entryPaidAt: NUEVO,
+    ...extra,
+  });
+
+  const conSuAno = coach({ subscriptionUntil: AHORA + 300 * DAY_MS, clientCount: 3 });
+  comprueba('con su año pagado, entra', hasPlatformAccess(conSuAno, AHORA));
+  comprueba('y no le piden el alta otra vez', !needsEntryPayment(conSuAno));
+  comprueba('con 3 de 5 plazas, le caben más', !trainerAtFreeLimit(conSuAno, AHORA));
+
+  const lleno = coach({ subscriptionUntil: AHORA + 300 * DAY_MS, clientCount: FREE_CLIENT_LIMIT });
+  comprueba('con las 5 llenas, tope', trainerAtFreeLimit(lleno, AHORA));
+  comprueba('pero sigue entrando en la app', hasPlatformAccess(lleno, AHORA));
+
+  const plus = coach({
+    subscriptionUntil: AHORA + 300 * DAY_MS,
+    subscriptionPlan: 'annual',
+    clientCount: 50,
+  });
+  comprueba('con el plan anual, sin tope', !trainerAtFreeLimit(plus, AHORA));
+
+  const vencido = coach({ subscriptionUntil: AHORA - DAY_MS, clientCount: 0 });
+  comprueba('con el año vencido, al muro aunque no tenga alumnos', !hasPlatformAccess(vencido, AHORA));
+}
+
+console.log('\nY al entrenador de antes no se le cambian las reglas');
+{
+  /*
+   * A estas cuentas se les prometió cinco alumnos gratis PARA SIEMPRE. "Para
+   * siempre" no puede durar hasta que cambie la lista de precios: dejar fuera a
+   * quien ya había entrado es la forma más rápida de perder a los primeros.
+   */
+  const viejo = (extra = {}) => ({
+    uid: 't1',
+    role: 'trainer',
+    email: 'antiguo@ejemplo.test',
+    name: 'Antiguo',
+    createdAt: PRIMER_ANO_DESDE - 30 * DAY_MS,
+    entryPaidAt: PRIMER_ANO_DESDE - 30 * DAY_MS,
+    ...extra,
+  });
+
+  comprueba(
+    'sin suscripción y con 3 alumnos, sigue dentro',
+    hasPlatformAccess(viejo({ subscriptionUntil: AHORA - DAY_MS, clientCount: 3 }), AHORA)
+  );
+  comprueba(
+    'con las 5 llenas, tope (como siempre)',
+    trainerAtFreeLimit(viejo({ subscriptionUntil: AHORA - DAY_MS, clientCount: 5 }), AHORA)
+  );
+  comprueba(
+    'y pasado el tope, al muro (como siempre)',
+    !hasPlatformAccess(viejo({ subscriptionUntil: AHORA - DAY_MS, clientCount: 6 }), AHORA)
+  );
+  comprueba(
+    'con suscripción activa, sin tope (lo que se le vendió)',
+    !trainerAtFreeLimit(viejo({ subscriptionUntil: AHORA + 100 * DAY_MS, clientCount: 40 }), AHORA)
+  );
 }
 
 console.log(fallos === 0 ? '\nTodo correcto ✔' : `\n${fallos} fallo(s)`);

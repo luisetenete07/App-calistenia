@@ -14,7 +14,7 @@ import { useAppleSignIn } from '../../lib/appleAuth';
 import { useGoogleSignIn } from '../../lib/googleAuth';
 import { mensajeDeEntrada } from '../../lib/enlazarCuenta';
 import { trackOnce } from '../../lib/analytics';
-import { FREE_CLIENT_LIMIT, TRIAL_DAYS } from '../../lib/subscription';
+import { FREE_CLIENT_LIMIT } from '../../lib/subscription';
 import { colors, fonts, gradients, spacing, typography } from '../../lib/theme';
 
 /**
@@ -42,7 +42,7 @@ const TIPOS: { titulo: string; icono: keyof typeof Ionicons.glyphMap; texto: str
   {
     titulo: 'Atleta',
     icono: 'barbell-outline',
-    texto: frase`Entrenas por tu cuenta. Empiezas con ${TRIAL_DAYS} días con todo abierto.`,
+    texto: 'Entrenas por tu cuenta. Entras con un año entero por delante.',
   },
   {
     titulo: 'Entrenador',

@@ -1,13 +1,13 @@
 import admin from 'firebase-admin';
 
 /**
- * Activación del alta de 1 €, en un solo sitio.
+ * Activación del primer año, en un solo sitio.
  *
  * Lo usan DOS caminos distintos: el webhook, cuando el pago trae el uid, y
  * api/claim-entry, cuando alguien se registra después de haber pagado en la
  * web. Si cada uno escribiera sus campos por su cuenta, tarde o temprano uno
- * de los dos se olvidaría de las plazas o de la prueba del atleta y habría
- * cuentas activadas a medias según por dónde entrasen.
+ * de los dos se olvidaría de las plazas o de la fecha de fin y habría cuentas
+ * activadas a medias según por dónde entrasen.
  *
  * El guion bajo del nombre no es decorativo: Vercel no publica como función
  * los ficheros de /api que empiezan por "_", así que esto es un módulo
@@ -15,14 +15,17 @@ import admin from 'firebase-admin';
  */
 
 /**
- * Días de prueba del atleta.
+ * El primer año, que es lo que se compra al entrar.
  *
- * Copia del `TRIAL_DAYS` de lib/planBase.ts. Este servidor se despliega aparte
- * (Vercel) y no comparte código con la app, así que el número vive en los dos
- * sitios —y en firestore.rules, que impone el tope—. Si cambia, cambia en los
- * tres: aquí es donde se escribe de verdad la fecha de fin.
+ * Copia del `PRIMER_ANO_DIAS` de lib/planBase.ts. Este servidor se despliega
+ * aparte (Vercel) y no comparte código con la app, así que el número vive en
+ * los dos sitios. Aquí es donde se escribe de verdad la fecha de fin.
+ *
+ * Antes eran 28 días de prueba para el atleta y nada para el entrenador. Ahora
+ * la entrada ES el primer año —27 € el entrenador, 17 € el atleta— y el reloj
+ * de los dos empieza al pagar.
  */
-export const TRIAL_DAYS = 28;
+export const PRIMER_ANO_DIAS = 365;
 
 /**
  * DOS CAMPAÑAS DE FUNDADORES, UNA POR TIPO DE CUENTA
@@ -85,10 +88,10 @@ async function repartirNumeroDeFundador(db, uid, rol) {
 /**
  * ¿Cuántas cuentas de ENTRENADOR han pagado ya con esta tarjeta?
  *
- * El alta de 1 € da cinco plazas de alumno. Si la misma tarjeta paga un
- * segundo alta de entrenador, no compra otras cinco plazas: compra una cuenta
- * más, vacía. Así abrir cuentas deja de ser una forma de esquivar los 180 € y
- * pasa a ser solo trabajo extra para el que lo intente.
+ * El primer año del entrenador incluye cinco plazas de alumno. Si la misma
+ * tarjeta paga un segundo primer año, no compra otras cinco plazas: compra una
+ * cuenta más, vacía. Así abrir cuentas deja de ser una forma de esquivar los
+ * 180 € y pasa a ser solo trabajo extra para el que lo intente.
  *
  * No se bloquea ni se borra nada: cuentas legítimas comparten tarjeta (una
  * pareja, un centro que paga por dos entrenadores). Se marca y se decide,
@@ -103,7 +106,7 @@ export async function cuentasConLaMismaTarjeta(db, fingerprint, uid) {
 }
 
 /**
- * Marca la cuenta como dada de alta.
+ * Marca la cuenta como dada de alta (primer año pagado).
  *
  * Devuelve false si no había nada que hacer (cuenta inexistente, o que no
  * paga plataforma), para que quien llame pueda decirlo.
@@ -117,13 +120,17 @@ export async function aplicarAlta(db, uid, { huella = null, customerId = null } 
   const datos = { entryPaidAt: Date.now(), stripeCustomerId: customerId };
   if (huella) datos.payerFingerprint = huella;
 
-  // El atleta compra con el euro sus días de prueba, así que el reloj
-  // empieza AQUÍ y no al registrarse: si tardó dos días en pagar, no los
-  // pierde. Solo la primera vez, y sin acortar nunca un acceso mayor que ya
-  // tuviera (cortesías, prórrogas dadas a mano).
-  if (perfil.role === 'athlete' && !perfil.entryPaidAt) {
-    const fin = Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000;
-    datos.trialEndsAt = fin;
+  // Lo que se compra al entrar es el PRIMER AÑO, y vale para los dos roles: el
+  // entrenador y el atleta pagan su año por adelantado. El reloj empieza AQUÍ
+  // y no al registrarse: si tardó dos días en pagar, no los pierde. Solo la
+  // primera vez, y sin acortar nunca un acceso mayor que ya tuviera
+  // (cortesías, prórrogas dadas a mano, o un plus ya contratado).
+  //
+  // No se escribe `trialEndsAt`: esto no es una prueba, es un año pagado. Ese
+  // campo es lo que hace que la app diga "estás de prueba" y que la tarea
+  // diaria mande los avisos de prueba, y las dos cosas serían mentira.
+  if (!perfil.entryPaidAt) {
+    const fin = Date.now() + PRIMER_ANO_DIAS * 24 * 60 * 60 * 1000;
     datos.subscriptionUntil = Math.max(fin, perfil.subscriptionUntil || 0);
   }
 
@@ -131,7 +138,7 @@ export async function aplicarAlta(db, uid, { huella = null, customerId = null } 
     const { ref, otras, yaEstaba } = await cuentasConLaMismaTarjeta(db, huella, uid);
     if (otras.length > 0) {
       // Esta tarjeta ya compró sus plazas. La cuenta entra igual, pero sin
-      // plazas incluidas: para tener alumnos, la cuota anual.
+      // plazas incluidas: para tener alumnos, el plan anual sin tope.
       datos.clientSlots = 0;
       datos.sharedCardWith = otras;
     }

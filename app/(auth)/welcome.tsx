@@ -8,7 +8,7 @@ import { Button } from '../../components/Button';
 import { Logo } from '../../components/Logo';
 import { markIntroSeen } from '../../lib/intro';
 import { trackOnce } from '../../lib/analytics';
-import { FREE_CLIENT_LIMIT, TRIAL_DAYS } from '../../lib/subscription';
+import { FREE_CLIENT_LIMIT } from '../../lib/subscription';
 import { colors, fonts, gradients, radius, spacing, typography } from '../../lib/theme';
 
 const NATIVE = Platform.OS !== 'web';
@@ -177,8 +177,8 @@ export default function WelcomeScreen() {
         {/* Sin precios (ver lib/subscription.ts): lo que aquí importa es que
             hay una forma de entrar para cada uno, no lo que cuesta. */}
         <Text style={styles.trialNote}>
-          Con tu entrenador o por tu cuenta, con {TRIAL_DAYS} días abiertos para
-          probarlo. Y si entrenas a otros, empiezas con {FREE_CLIENT_LIMIT} alumnos.
+          Con tu entrenador o por tu cuenta, con un año entero por delante. Y si
+          entrenas a otros, empiezas con {FREE_CLIENT_LIMIT} alumnos.
         </Text>
         <Pressable onPress={() => go('/(auth)/login')} hitSlop={8} style={styles.loginLink}>
           <Text style={styles.loginText}>Ya tengo cuenta</Text>

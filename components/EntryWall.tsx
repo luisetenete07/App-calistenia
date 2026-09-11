@@ -9,7 +9,6 @@ import { useAuth } from '../lib/auth-context';
 import { track, trackOnce } from '../lib/analytics';
 import {
   CAN_LINK_TO_PAYMENT,
-  TRIAL_DAYS,
   CONTACT_EMAIL,
   FREE_CLIENT_LIMIT,
   claimEntryNow,
@@ -18,13 +17,13 @@ import {
 import { colors, fonts, spacing, typography } from '../lib/theme';
 
 /**
- * Alta de la cuenta: un euro, una vez.
+ * Alta de la cuenta: el primer año, pagado una vez.
  *
- * No está aquí para hacer caja —un euro no financia nada— sino para que entrar
- * cueste algo identificable. Al pagar con tarjeta queda una huella que es la
- * misma para la misma tarjeta en cualquier cuenta, y eso es lo que impide que un
- * entrenador se reparta en cuentas de cinco alumnos para no pagar la cuota
- * anual. El que va de frente no nota nada: mete la tarjeta una vez y entra.
+ * Lo que se compra aquí es el año entero, no una prueba: 27 € el entrenador,
+ * 17 € el atleta. Se paga con tarjeta y queda una huella que es la misma para
+ * la misma tarjeta en cualquier cuenta, y eso es lo que impide que un
+ * entrenador se reparta en cuentas de cinco alumnos para no pagar el plan sin
+ * tope. El que va de frente no nota nada: mete la tarjeta una vez y entra.
  *
  * EN iOS NO SE VENDE NADA. Las normas de la App Store prohíben cobrar por fuera
  * lo que se usa dentro, e incluso enlazar a la web para pagarlo; un muro con
@@ -75,7 +74,7 @@ export function EntryWall() {
       try {
         const fresco = await refreshProfile();
         if (fresco?.entryPaidAt) return true;
-        // Puede haber pagado en la WEB, antes de tener cuenta: entonces el euro
+        // Puede haber pagado en la WEB, antes de tener cuenta: entonces el pago
         // está apuntado a su correo y hay que ir a recogerlo. Es el camino
         // normal de quien llega por udeca.app, no un caso raro.
         if (firebaseUser) {
@@ -132,13 +131,13 @@ export function EntryWall() {
     >
       {puedeCobrarAqui ? (
         <>
-          {/* Sin precio (ver lib/subscription.ts): el alta se completa en la
+          {/* Sin precio (ver lib/subscription.ts): el pago se completa en la
               web, que es donde el importe está siempre al día. Aquí solo se
-              dice qué se lleva quien la haga. */}
+              dice qué se lleva quien lo haga. */}
           <GateText>
             {esAtleta
-              ? frase`Con el alta empiezan tus ${TRIAL_DAYS} días con todo abierto. Después decides si sigues.`
-              : frase`El alta incluye ${FREE_CLIENT_LIMIT} alumnos con su propia cuenta. Si tu grupo crece, entonces hablamos.`}
+              ? 'Entras con un año entero por delante. Al terminarlo decides si sigues.'
+              : frase`Tu primer año incluye ${FREE_CLIENT_LIMIT} alumnos con su propia cuenta. Si tu grupo crece, pasas al plan sin tope.`}
           </GateText>
           <Button
             title={url ? 'Activar mi cuenta en la web' : 'Contactar para activar'}

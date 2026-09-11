@@ -8,7 +8,7 @@ import { ScreenContainer } from '../../components/ScreenContainer';
 import { TextField } from '../../components/TextField';
 import { useAuth } from '../../lib/auth-context';
 import { colors, fonts, radius, spacing, typography } from '../../lib/theme';
-import { FREE_CLIENT_LIMIT, TRIAL_DAYS } from '../../lib/subscription';
+import { FREE_CLIENT_LIMIT } from '../../lib/subscription';
 import type { UserRole } from '../../lib/types';
 
 /**
@@ -35,7 +35,7 @@ const OPCIONES: { valor: UserRole; titulo: string; icono: keyof typeof Ionicons.
     valor: 'athlete',
     titulo: 'Atleta',
     icono: 'barbell-outline',
-    texto: frase`Entrenas por tu cuenta: tus rutinas, tu progreso y tu nutrición. Empiezas con ${TRIAL_DAYS} días con todo abierto.`,
+    texto: 'Entrenas por tu cuenta: tus rutinas, tu progreso y tu nutrición. Entras con un año entero por delante.',
   },
   {
     valor: 'trainer',

@@ -24,42 +24,53 @@ import type { UserProfile } from './types';
  */
 
 /**
- * Payment Links de Stripe, los CINCO de producción. COBRAN DE VERDAD.
+ * Payment Links de Stripe. COBRAN DE VERDAD.
  *
- *   - Alta de entrenador:          1 € (pago único)
- *   - Alta de atleta:              1 € (pago único)
- *   - Suscripción de entrenador: 180 €/año
- *   - Suscripción de atleta:      10 €/mes
- *   - Atleta, pagando el año:     96 €/año  (ver ATHLETE_ANNUAL_EUR)
+ * LOS CUATRO DEL MODELO NUEVO
  *
- * Están creados en el perfil de UDECA, y las claves de Vercel
- * (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`) son de ESE MISMO perfil. Tienen
- * que ir juntos: con las claves de otra cuenta, el pago entra y la cuenta no se
- * activa nunca, sin dar ningún error. Ver PAGOS_ACTIVOS en lib/planBase.ts.
+ *   - Primer año de entrenador:   27 €  (pago único)
+ *   - Primer año de atleta:       17 €  (pago único)
+ *   - Cuota anual de entrenador: 180 €/año  (el plan que quita el tope)
+ *   - Cuota anual de atleta:      95 €/año
+ *
+ * TRES ESTÁN VACÍOS A PROPÓSITO, Y ESO NO ES UN OLVIDO
+ *
+ * Los precios cambiaron y los enlaces de Stripe todavía no existen. Dejar aquí
+ * los antiguos habría sido lo peligroso: la web diría 27 € y la pasarela
+ * cobraría 1 €, sin dar ningún error a nadie. Un enlace equivocado no se nota
+ * al probar —la pasarela se abre, la tarjeta pasa, la cuenta se activa— y se
+ * descubre mirando las cuentas del mes.
+ *
+ * Vacío, en cambio, se comporta solo: `entryCheckoutUrl` y
+ * `subscriptionCheckoutUrl` devuelven null, y todo lo que los usa ya sabe que
+ * sin enlace no se enseña el botón. Nadie puede pagar el importe que no es.
+ *
+ * CÓMO SE RELLENAN
+ *
+ * En Stripe → Payments → Payment Links, uno por producto, y se pega aquí el de
+ * PRODUCCIÓN (`buy.stripe.com/…`). NUNCA los de prueba (`buy.stripe.com/test_…`):
+ * abren la pasarela, aceptan la tarjeta, dan las gracias y no cobran nada, así
+ * que quien pulsara se quedaría convencido de haber pagado. Ya estuvieron
+ * publicados una vez, de ahí el guardián en scripts/check-pago-ios.mjs.
+ *
+ * Los dos del primer año son los MISMOS que van en `web/config.js`: la web los
+ * usa para quien llega de fuera y la app para quien se registró sin pasar por
+ * ella. Si cambias uno, cambia el otro — check-stripe.mjs se queja si se
+ * separan.
  *
  * La app les añade `?client_reference_id=<uid>` para que el webhook active la
  * cuenta correcta sola, y `prefilled_email` para no hacer escribir el correo.
- *
- * NUNCA los de prueba (`buy.stripe.com/test_…`): abren la pasarela, aceptan la
- * tarjeta, dan las gracias y no cobran nada, así que quien pulsara se quedaría
- * convencido de haber pagado. Se distinguen por cinco letras y ya estuvieron
- * publicados una vez, de ahí el guardián en scripts/check-pago-ios.mjs.
- *
- * Los dos del alta son los MISMOS que van en `web/config.js`: la web los usa
- * para quien llega de fuera y la app para quien se registró sin pasar por ella.
- * Si cambias uno, cambia el otro — check-stripe.mjs se queja si se separan.
+ */
+export const COACH_ENTRY_LINK: string = '';
+export const ATHLETE_ENTRY_LINK: string = '';
+/**
+ * La cuota anual del entrenador (180 €). Sigue siendo la de siempre: el precio
+ * no ha cambiado, así que el enlace tampoco.
  */
 export const COACH_PAYMENT_LINK: string =
   'https://buy.stripe.com/eVqcN4cuP9qH70IgPW3sI02';
-export const ATHLETE_PAYMENT_LINK: string =
-  'https://buy.stripe.com/5kQ3cudyT8mDetafLS3sI03';
-export const COACH_ENTRY_LINK: string =
-  'https://buy.stripe.com/5kQeVc8ezdGX84MbvC3sI00';
-export const ATHLETE_ENTRY_LINK: string =
-  'https://buy.stripe.com/4gMdR8gL50UbbgY9nu3sI01';
-/** El quinto: el atleta que paga el año (ver ATHLETE_ANNUAL_EUR). */
-export const ATHLETE_ANNUAL_LINK: string =
-  'https://buy.stripe.com/3cIdR866rcCT98Q9nu3sI05';
+/** La cuota anual del atleta (95 €). Pendiente: antes eran 96. */
+export const ATHLETE_ANNUAL_LINK: string = '';
 
 /**
  * Le pega al enlace el uid y el correo.
@@ -85,28 +96,15 @@ export function entryCheckoutUrl(profile: UserProfile | null): string | null {
 }
 
 /**
- * Cómo quiere pagar el atleta. El entrenador solo tiene anual, así que no elige.
- */
-export type PlanElegido = 'monthly' | 'annual';
-
-/**
- * URL de suscripción para este usuario, con su uid para la activación auto.
+ * URL de la cuota anual, con su uid para la activación automática.
  *
- * El `plan` solo lo mira el atleta, que es quien tiene dos formas de pagar. Por
- * defecto la mensual: si algún día se llama sin decir cuál, que sea la barata
- * de entrada y no la de 96 €.
+ * Ya no hay nada que elegir: se paga por años. Antes el atleta tenía mensual o
+ * anual y había que decirle a esta función cuál; ahora el atleta renueva a 95 €
+ * al año y el entrenador a 180 €, y cada rol tiene un único enlace.
  */
-export function subscriptionCheckoutUrl(
-  profile: UserProfile | null,
-  plan: PlanElegido = 'monthly'
-): string | null {
+export function subscriptionCheckoutUrl(profile: UserProfile | null): string | null {
   if (!profile) return null;
-  const base =
-    profile.role === 'athlete'
-      ? plan === 'annual'
-        ? ATHLETE_ANNUAL_LINK
-        : ATHLETE_PAYMENT_LINK
-      : COACH_PAYMENT_LINK;
+  const base = profile.role === 'athlete' ? ATHLETE_ANNUAL_LINK : COACH_PAYMENT_LINK;
   if (!base) return null;
   return conQuienPaga(base, profile);
 }

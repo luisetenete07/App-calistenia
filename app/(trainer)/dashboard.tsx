@@ -206,7 +206,7 @@ export default function TrainerDashboard() {
     // una respuesta que va a ser que no.
     if (trainerAtFreeLimit(profile)) {
       showToast(
-        frase`Tu alta incluye ${FREE_CLIENT_LIMIT} alumnos. Activa la suscripción anual para aceptar a más.`
+        frase`Tu plan incluye ${FREE_CLIENT_LIMIT} alumnos. Pasa al plan sin tope para aceptar a más.`
       );
       return;
     }

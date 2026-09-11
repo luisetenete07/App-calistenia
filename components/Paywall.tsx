@@ -29,8 +29,9 @@ const BENEFITS = [
 ];
 
 /**
- * Muro de suscripción del coach: aparece cuando su prueba o plan caduca.
- * Los datos no se tocan nunca; solo se bloquea el acceso hasta renovar.
+ * Muro de suscripción: aparece cuando se acaba el año pagado (o la prueba de
+ * una cuenta antigua). Los datos no se tocan nunca; solo se bloquea el acceso
+ * hasta renovar.
  */
 const ATHLETE_BENEFITS = [
   'Tus rutinas, a tu medida y sin límite',
@@ -43,9 +44,9 @@ const ATHLETE_BENEFITS = [
 export function Paywall() {
   const { profile, signOut, refreshProfile } = useAuth();
   const isAthlete = profile?.role === 'athlete';
-  // Plazas de alumno de ESTA cuenta: normalmente las del alta, pero cero si el
-  // servidor detectó que ese euro ya se pagó con la misma tarjeta en otra
-  // cuenta de entrenador. El texto tiene que decir la verdad en los dos casos.
+  // Plazas de alumno de ESTA cuenta: normalmente las del plan de entrada, pero
+  // cero si el servidor detectó que se pagó con la misma tarjeta que ya las
+  // gastó en otra cuenta. El texto tiene que decir la verdad en los dos casos.
   const plazas = clientSlotsOf(profile);
   // Si llegó pronto, tiene un número de fundador. Este es el único sitio donde
   // se ve apagado —el perfil ya no se abre— y también el único momento en que
@@ -140,18 +141,18 @@ export function Paywall() {
     : !CAN_LINK_TO_PAYMENT
       ? 'Tu cuenta no está activa'
       : isAthlete
-        ? 'Has terminado la prueba'
-        : 'Activa UDECA Pro';
+        ? 'Tu año ha terminado'
+        : 'Renueva tu cuenta de entrenador';
 
   const explicacion = !PAGOS_ACTIVOS
     ? 'Se te ha acabado el plazo, pero todavía no hemos abierto los pagos. Escríbenos y te ampliamos el acceso a mano. Tus datos, tus rutinas y todo tu progreso siguen intactos.'
     : !CAN_LINK_TO_PAYMENT
     ? 'Tus datos, tus rutinas y todo tu progreso siguen intactos. En cuanto tu cuenta vuelva a estar activa, la app lo reconoce sola.'
     : isAthlete
-      ? 'Este mes ya has hecho la parte difícil: empezar. Todo tu progreso sigue aquí, intacto, esperándote. Este es el siguiente nivel.'
+      ? 'Ya has hecho la parte difícil: un año entrenando. Todo tu progreso sigue aquí, intacto, esperándote. Renueva y sigue donde lo dejaste.'
       : plazas === 0
-        ? 'Esta cuenta no incluye alumnos: el alta de su tarjeta ya se usó en otra cuenta de entrenador. Con la suscripción anual tienes alumnos ilimitados. Tus datos están a salvo y te esperan.'
-        : frase`Tu grupo ha superado los ${plazas} alumnos que incluye el alta. Activa la suscripción anual para seguir con todos. Tus datos están a salvo y te esperan.`;
+        ? 'Esta cuenta no incluye alumnos: su tarjeta ya gastó las plazas en otra cuenta de entrenador. Con el plan anual tienes alumnos ilimitados. Tus datos están a salvo y te esperan.'
+        : 'Para seguir llevando a tu grupo hace falta el plan anual, con alumnos ilimitados y la app entera. Tus alumnos, sus rutinas y su historial están a salvo y te esperan.';
 
   return (
     <GateScreen
@@ -190,8 +191,9 @@ export function Paywall() {
         </View>
       ))}
 
-      {/* El atleta elige cómo pagar; el entrenador solo tiene el plan anual,
-          así que para él sigue siendo un botón y no una decisión. */}
+      {/* Un solo camino para los dos: se paga por años. Al atleta se le
+          enseña con ElegirPlan porque ahí está contado qué se lleva; al
+          entrenador, el botón de siempre. */}
       {CAN_LINK_TO_PAYMENT && isAthlete && checkoutUrl ? (
         <ElegirPlan profile={profile} nota={null} />
       ) : CAN_LINK_TO_PAYMENT ? (

@@ -1,29 +1,38 @@
 /**
- * La prueba del atleta: cuánto dura y cuándo se le habla de pagar.
+ * El plazo de la cuenta: cuánto dura y cuándo se le habla de pagar.
  *
  * Son dos reglas que se rompen solas si nadie las mira, y las dos por el mismo
- * motivo: el número de días vive en TRES sitios que no pueden importarse entre
- * sí, y el momento del aviso es una condición de una línea que cualquiera
- * puede "simplificar" sin saber lo que quita.
+ * motivo: los días viven en sitios que no pueden importarse entre sí, y el
+ * momento del aviso es una condición de una línea que cualquiera puede
+ * "simplificar" sin saber lo que quita.
  *
- * LOS DÍAS. `lib/planBase.ts` los usa en la app, `firestore.rules` impone el
- * tope al crear la cuenta y `payments-webhook/api/_alta.js` es quien escribe de
- * verdad la fecha de fin cuando entra el euro. Si uno se queda atrás, no falla
- * nada de forma visible: simplemente la prueba dura otra cosa distinta de la
- * que dice la app, o Firestore rechaza el registro con "missing or insufficient
- * permissions" y el atleta no puede entrar. Ninguna de las dos se nota hasta
- * que la sufre un usuario.
+ * EL PRIMER AÑO. Es lo que se compra al entrar, para los DOS roles. Lo escribe
+ * `payments-webhook/api/_alta.js`, que se despliega aparte y no comparte código
+ * con la app, así que el número está copiado de `lib/planBase.ts`. Si uno se
+ * queda atrás no falla nada visible: simplemente la cuenta dura otra cosa
+ * distinta de la que promete la web.
+ *
+ * LA PRUEBA VIEJA. Quedan cuentas con una prueba de 28 días en marcha y el tope
+ * sigue escrito en `firestore.rules`, que rechaza el registro con "missing or
+ * insufficient permissions" si la app pide más de la cuenta. Mientras quede una
+ * sola, este número se comprueba igual.
  *
  * EL AVISO. El de pantalla completa sale UNA vez, el último día. No el día que
- * se crea la cuenta: ese día el atleta acaba de pagar su euro y lo que ha
- * comprado es justamente un mes sin que le pidan nada más. La tarjeta del plan
- * sigue en su perfil todo ese tiempo para quien la busque; lo que no puede
+ * se crea la cuenta: ese día el atleta acaba de pagar su año y lo que ha
+ * comprado es justamente doce meses sin que le pidan nada más. La tarjeta del
+ * plan sigue en su perfil todo ese tiempo para quien la busque; lo que no puede
  * pasar es que le salte a la cara sin haber empezado.
  *
  *   node --experimental-strip-types --import ./scripts/_ts-hook.mjs scripts/check-prueba.mjs
  */
 import { readFileSync } from 'node:fs';
-import { DAY_MS, TRIAL_DAYS, tocaElAvisoDelAtleta, trialUntil } from '../lib/planBase.ts';
+import {
+  DAY_MS,
+  PRIMER_ANO_DIAS,
+  TRIAL_DAYS,
+  tocaElAvisoDelAtleta,
+  trialUntil,
+} from '../lib/planBase.ts';
 
 const AHORA = Date.UTC(2026, 7, 15, 12, 0, 0);
 const lee = (ruta) => readFileSync(new URL(`../${ruta}`, import.meta.url), 'utf8');
@@ -50,22 +59,43 @@ const atleta = (dias, extra = {}) => {
   };
 };
 
-console.log('\nLa prueba dura un mes');
-ok(`TRIAL_DAYS = ${TRIAL_DAYS}`, TRIAL_DAYS === 28, String(TRIAL_DAYS));
+console.log('\nSe entra pagando el primer año entero');
+ok(`PRIMER_ANO_DIAS = ${PRIMER_ANO_DIAS}`, PRIMER_ANO_DIAS === 365, String(PRIMER_ANO_DIAS));
 
-console.log('\nY el mismo número en los tres sitios');
+console.log('\nY el servidor escribe ese mismo año, para los dos roles');
+{
+  const alta = lee('payments-webhook/api/_alta.js');
+  ok(
+    `_alta.js escribe ${PRIMER_ANO_DIAS} días`,
+    new RegExp(`PRIMER_ANO_DIAS\\s*=\\s*${PRIMER_ANO_DIAS}\\b`).test(alta),
+    'es quien fija la fecha de fin cuando entra el pago'
+  );
+  // El año es de los DOS. Cuando esto valía solo para el atleta, el entrenador
+  // pagaba su alta y se quedaba sin `subscriptionUntil`: su cuenta entraba
+  // caducada y veía el muro de pago con el año recién pagado.
+  const bloque = alta.slice(alta.indexOf('const datos = {'), alta.indexOf("if (perfil.role === 'trainer'"));
+  ok(
+    'sin distinguir el rol',
+    bloque.includes('if (!perfil.entryPaidAt) {') && !bloque.includes("role === 'athlete'"),
+    'el entrenador también compra su año al entrar'
+  );
+  // `trialEndsAt` es lo que hace que la app diga "estás de prueba" y que el
+  // cron mande los avisos de prueba. Un año pagado no es una prueba.
+  ok(
+    'y sin marcar la cuenta como "de prueba"',
+    !/datos\.trialEndsAt/.test(alta),
+    'escribir trialEndsAt convertiría el año pagado en una prueba'
+  );
+}
+
+console.log('\nLa prueba vieja sigue durando lo mismo donde queda escrita');
+ok(`TRIAL_DAYS = ${TRIAL_DAYS}`, TRIAL_DAYS === 28, String(TRIAL_DAYS));
 {
   const reglas = lee('firestore.rules');
   ok(
     `firestore.rules topa en (${TRIAL_DAYS} + 2) días`,
     reglas.includes(`(${TRIAL_DAYS} + 2) * 24 * 60 * 60 * 1000`),
     'el margen de 2 días absorbe el desfase de reloj del móvil'
-  );
-  const alta = lee('payments-webhook/api/_alta.js');
-  ok(
-    `_alta.js escribe ${TRIAL_DAYS} días`,
-    new RegExp(`TRIAL_DAYS\\s*=\\s*${TRIAL_DAYS}\\b`).test(alta),
-    'es quien fija la fecha de fin cuando entra el euro'
   );
 }
 
@@ -116,9 +146,9 @@ console.log('\nY la pantalla usa esta misma regla, no una copia suya');
   ok(
     'la tarjeta del perfil no lleva esa condición',
     cuerpoTarjeta.length > 0 && !cuerpoTarjeta.includes('tocaElAvisoDelAtleta'),
-    'en el perfil tiene que estar disponible toda la prueba'
+    'en el perfil tiene que estar disponible todo el plazo'
   );
 }
 
-console.log(fallos === 0 ? '\n✔ La prueba dura lo que dice y el aviso llega cuando toca' : `\n${fallos} fallo(s)`);
+console.log(fallos === 0 ? '\n✔ El plazo dura lo que dice y el aviso llega cuando toca' : `\n${fallos} fallo(s)`);
 process.exit(fallos === 0 ? 0 : 1);

@@ -58,19 +58,37 @@ service cloud.firestore {
        * imponer aquí el límite del plan gratuito. Si lo escribiera el propio
        * coach, bastaría con ponerlo a cero para tener alumnos infinitos gratis.
        *
-       * El 5 de abajo es FREE_CLIENT_LIMIT (los alumnos que incluye el alta de
-       * 1 €). Vive en tres sitios que no pueden importarse entre sí:
-       * lib/subscription.ts (app), payments-webhook/api/join.js (servidor) y
-       * aquí. Si lo cambias, cámbialo en los tres.
+       * El 5 de abajo es FREE_CLIENT_LIMIT (los alumnos que incluye el primer
+       * año del entrenador). Vive en tres sitios que no pueden importarse
+       * entre sí: lib/subscription.ts (app), payments-webhook/api/join.js
+       * (servidor) y aquí. Si lo cambias, cámbialo en los tres.
        *
        * `clientSlots` lo escribe SOLO el servidor y baja ese tope a cero cuando
-       * el alta se pagó con una tarjeta que ya había gastado sus plazas en otra
-       * cuenta de entrenador.
+       * se pagó con una tarjeta que ya había gastado sus plazas en otra cuenta
+       * de entrenador.
+       *
+       * TENER ACCESO NO ES NO TENER TOPE. Con el modelo del primer año, el
+       * entrenador paga al entrar (27 €), así que tiene `subscriptionUntil` en
+       * el futuro desde el primer minuto. Si el tope siguiera atado a eso —como
+       * estaba—, esta regla de respaldo dejaría meter alumnos sin límite a
+       * cualquiera recién dado de alta y el plan sin tope (180 €) no lo pagaría
+       * nadie. Lo que quita el tope es el PLAN ('annual'), que solo escribe el
+       * servidor al cobrar la suscripción.
+       *
+       * Las cuentas anteriores al cambio (createdAt < PRIMER_ANO_DESDE,
+       * 1789084800000 = 2026-09-11) conservan la regla vieja: a ellas se les
+       * vendió que con la suscripción activa no había tope.
        */
       function coachWithinPlan() {
         let coach = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-        return !('subscriptionUntil' in coach)
-          || coach.subscriptionUntil > request.time.toMillis()
+        let activa = !('subscriptionUntil' in coach)
+          || coach.subscriptionUntil > request.time.toMillis();
+        let sinTope = activa
+          && (
+            coach.get('subscriptionPlan', '') == 'annual'
+            || coach.get('createdAt', 0) < 1789084800000
+          );
+        return sinTope
           || coach.get('clientCount', 0) < coach.get('clientSlots', 5);
       }
       allow read: if request.auth != null

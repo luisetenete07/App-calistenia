@@ -22,15 +22,21 @@ import admin from 'firebase-admin';
  */
 
 /**
- * Alumnos incluidos en el alta de 1 € del entrenador.
+ * Alumnos incluidos en el primer año del entrenador (27 €).
  * Debe coincidir con FREE_CLIENT_LIMIT de lib/subscription.ts.
  */
 const FREE_CLIENT_LIMIT = 5;
 
 /**
- * Plazas de ESTA cuenta. Por defecto las del alta, pero el servidor las baja a
- * cero cuando el alta se pagó con una tarjeta que ya había comprado sus plazas
- * en otra cuenta de entrenador (ver stripe-webhook.js). Un euro, cinco plazas,
+ * Desde cuándo rige el modelo del primer año de pago.
+ * Copia de PRIMER_ANO_DESDE en lib/planBase.ts.
+ */
+const PRIMER_ANO_DESDE = Date.parse('2026-09-11T00:00:00Z');
+
+/**
+ * Plazas de ESTA cuenta. Por defecto las del primer año, pero el servidor las
+ * baja a cero cuando se pagó con una tarjeta que ya había comprado sus plazas
+ * en otra cuenta de entrenador (ver stripe-webhook.js). Un pago, cinco plazas,
  * una vez.
  */
 function plazasDe(trainer) {
@@ -46,12 +52,34 @@ function initAdmin() {
   }
 }
 
-/** ¿Tiene el entrenador suscripción vigente? (misma regla que la app). */
+/** ¿Tiene el entrenador acceso vigente? (misma regla que la app). */
 function hasActiveSubscription(trainer) {
   const until = trainer?.subscriptionUntil;
   // Sin campo = cuenta fundadora, anterior a la monetización: acceso completo.
   if (until === undefined) return true;
   return typeof until === 'number' && until > Date.now();
+}
+
+/**
+ * ¿Puede este entrenador aceptar alumnos sin tope?
+ *
+ * OJO: no es lo mismo que tener el acceso vigente, y confundirlos regalaba la
+ * app entera. Con el modelo nuevo el primer año se PAGA (27 €), así que un
+ * entrenador recién dado de alta tiene suscripción vigente desde el minuto
+ * uno; si el tope siguiera atado a eso, los 180 € del plan sin tope no los
+ * pagaría nadie —bastaría con entrar—.
+ *
+ * Lo que quita el tope es el PLAN, que solo escribe Stripe al contratar la
+ * suscripción anual (`subscriptionPlan === 'annual'`).
+ *
+ * Las cuentas ANTERIORES al cambio conservan la regla vieja: a ellas se les
+ * vendió que con la suscripción activa no había tope, y eso se respeta.
+ * Es la misma distinción que hace `trainerAtFreeLimit` en lib/planBase.ts.
+ */
+function sinTopeDeAlumnos(trainer) {
+  if (trainer?.subscriptionPlan === 'annual' && hasActiveSubscription(trainer)) return true;
+  if ((trainer?.createdAt ?? 0) >= PRIMER_ANO_DESDE) return false;
+  return hasActiveSubscription(trainer);
 }
 
 /** Cuenta real de alumnos del entrenador. */
@@ -70,7 +98,7 @@ async function countClients(db, trainerId) {
  * coach ya no puede falsearlo para seguir creciendo gratis.
  */
 async function writeCount(db, trainer, trainerId, count) {
-  const full = !hasActiveSubscription(trainer) && count >= plazasDe(trainer);
+  const full = !sinTopeDeAlumnos(trainer) && count >= plazasDe(trainer);
   await db.collection('users').doc(trainerId).update({ clientCount: count });
   if (trainer?.inviteCode) {
     await db
@@ -131,14 +159,14 @@ export default async function handler(req, res) {
       }
 
       const count = await countClients(db, caller.uid);
-      if (!hasActiveSubscription(trainer) && count >= plazasDe(trainer)) {
+      if (!sinTopeDeAlumnos(trainer) && count >= plazasDe(trainer)) {
         await writeCount(db, trainer, caller.uid, count);
         res.status(200).json({
           ok: false,
           reason:
             plazasDe(trainer) === 0
-              ? 'Esta cuenta no tiene plazas incluidas: el alta se pagó con una tarjeta que ya las usó en otra cuenta. Activa la suscripción anual para aceptar alumnos.'
-              : `Tu alta incluye ${plazasDe(trainer)} alumnos. Activa la suscripción anual para aceptar a más.`,
+              ? 'Esta cuenta no tiene plazas incluidas: se pagó con una tarjeta que ya las usó en otra cuenta. Pasa al plan sin tope para aceptar alumnos.'
+              : `Tu plan incluye ${plazasDe(trainer)} alumnos. Pasa al plan sin tope para aceptar a más.`,
         });
         return;
       }

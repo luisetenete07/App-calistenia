@@ -12,6 +12,7 @@ import {
   CAN_LINK_TO_PAYMENT,
   clientSlotsOf,
   isAdmin,
+  planIlimitado,
   subscriptionCheckoutUrl,
   subscriptionState,
   tocaElAvisoDelAtleta,
@@ -24,10 +25,14 @@ import { colors, fonts, radius, spacing, typography } from '../lib/theme';
 /**
  * ¿Le queda plan por delante a esta cuenta?
  *
- * Sí mientras no tenga una suscripción de pago: el atleta durante su prueba y
- * el entrenador con el alta pagada pero sin cuota anual. En cuanto pagan, esto
- * desaparece de toda la app: seguir enseñando "hazte de pago" a quien ya paga
- * es la forma más rápida de parecer una máquina tragaperras.
+ * Al ENTRENADOR, mientras no tenga el plan sin tope. Su primer año está
+ * pagado y es un año entero de app completa, pero el techo de alumnos sigue
+ * ahí: el plan que lo quita se puede contratar desde el primer día y no hay
+ * que esperar a chocar con la quinta plaza para enterarse de que existe.
+ *
+ * Al ATLETA, solo cuando no tiene acceso pagado por delante: durante su año no
+ * hay nada que venderle, y seguir enseñándole "hazte de pago" a quien acaba de
+ * pagar es la forma más rápida de parecer una máquina tragaperras.
  */
 export function canUpgrade(profile: UserProfile | null): boolean {
   if (!profile || !CAN_LINK_TO_PAYMENT) return false;
@@ -35,6 +40,7 @@ export function canUpgrade(profile: UserProfile | null): boolean {
   if (isAdmin(profile)) return false;
   const estado = subscriptionState(profile);
   if (estado.legacy) return false; // cuenta fundadora: acceso completo de por vida
+  if (profile.role === 'trainer') return !planIlimitado(profile);
   return !estado.active || estado.trial;
 }
 
@@ -51,10 +57,10 @@ interface Props {
 /**
  * "Puedes pasar al plan completo cuando quieras."
  *
- * Existe por una razón concreta: hay gente que paga el euro del alta y ya viene
- * decidida a pagar el plano completo, pero no encuentra dónde. Sin esto, su
- * única forma de suscribirse era esperar a que caducara la prueba y toparse con
- * el muro, que es hacerle esperar para cobrarle.
+ * Existe por una razón concreta: hay gente que entra y ya viene decidida a
+ * pagar el plan completo, pero no encuentra dónde. Sin esto, su única forma de
+ * contratarlo era esperar a chocar con el tope o a que se le acabara el año y
+ * toparse con el muro, que es hacer esperar a quien quiere pagar.
  *
  * Solo aparece donde se puede enlazar a pagar (ver CAN_LINK_TO_PAYMENT): sin
  * precio ni enlazar a pagar fuera.
@@ -67,6 +73,8 @@ export function UpgradeCard({ variante = 'completa', onClose }: Props) {
   const estado = subscriptionState(profile);
   const url = subscriptionCheckoutUrl(profile);
   const diasRestantes = estado.trial ? estado.daysLeft : null;
+  /** Se le acabó el año: ya no es "pasar al plan", es volver a entrar. */
+  const caducado = !estado.active;
 
   /*
    * Aquí no se dice ningún precio (ver lib/subscription.ts). Lo que sustituye
@@ -75,18 +83,16 @@ export function UpgradeCard({ variante = 'completa', onClose }: Props) {
    * cuando se acaben—. Eso ya estaba escrito; lo único que se va es el número.
    */
   /*
-   * Al atleta ya no se le puede decir aquí "sin permanencia": desde que hay
-   * plan anual eso solo vale para uno de los dos, y además lo dice cada opción
-   * en su propia línea, justo debajo. Decirlo aquí era repetirlo dos veces y
-   * media mentira.
+   * Lo que se dice justo antes del botón del atleta.
    *
-   * Lo que sí conviene decir antes de que elija es lo que NO cambia entre las
-   * dos: que se lleva lo mismo pague como pague.
+   * No es un adorno: es la única línea que aclara qué se lleva por el dinero.
+   * Va aquí y no dentro de `ElegirPlan` porque ese componente lo comparten el
+   * muro y esta tarjeta, y en el muro la pantalla ya lo dice por su cuenta.
    *
-   * Al entrenador ya no le corresponde nada aquí: él no elige, y "se cobra una
-   * vez al año" va pegado a su botón, que es donde importa saberlo.
+   * Al entrenador no le corresponde nada aquí: "se cobra una vez al año" va
+   * pegado a su botón, que es donde importa saberlo.
    */
-  const facturacion = 'Elijas como elijas, la app es la misma y entera.';
+  const facturacion = 'Un año entero, la app completa y sin recortes.';
 
   /**
    * Las plazas del entrenador, con nombre y apellidos.
@@ -126,7 +132,7 @@ export function UpgradeCard({ variante = 'completa', onClose }: Props) {
       ]
     : [];
 
-  /** Lo que el entrenador ya tiene con su alta, pague o no el plan. */
+  /** Lo que el entrenador ya tiene con su año, pague o no el plan sin tope. */
   const yaIncluido = [
     'Cobros, avisos de impago y control de cuotas',
     'Rutinas, ciclos y calendario',
@@ -140,7 +146,7 @@ export function UpgradeCard({ variante = 'completa', onClose }: Props) {
     ? plazas === 0
       ? 'Esta cuenta no incluye alumnos'
       : frase`Has llenado tus ${plazas} plazas`
-    : frase`Tu alta incluye ${plazas} alumnos`;
+    : frase`Tu plan incluye ${plazas} alumnos`;
   /**
    * El texto dice DOS cosas que no pueden faltar: lo que ya tiene pagado para
    * siempre, y que a partir de la plaza siguiente el plan deja de ser opcional.
@@ -149,9 +155,9 @@ export function UpgradeCard({ variante = 'completa', onClose }: Props) {
    */
   const textoCoach = lleno
     ? plazas === 0
-      ? 'El alta de tu tarjeta ya se usó en otra cuenta de entrenador, así que esta entra sin plazas. Con el plan tienes alumnos ilimitados.'
+      ? 'Tu tarjeta ya gastó sus plazas en otra cuenta de entrenador, así que esta entra sin plazas. Con el plan sin tope tienes alumnos ilimitados.'
       : frase`Para aceptar al alumno ${plazas + 1} hace falta el plan. Los ${plazas} que ya tienes siguen contigo pagues o no.`
-    : frase`Ya llevas ${usados} de ${plazas}, y son tuyos para siempre. Del alumno ${plazas + 1} en adelante hace falta el plan, y el grupo deja de tener tope.`;
+    : frase`Ya llevas ${usados} de ${plazas}. Del alumno ${plazas + 1} en adelante hace falta el plan, y el grupo deja de tener tope.`;
 
   const abrir = () => {
     void track('checkout_start');
@@ -206,13 +212,14 @@ export function UpgradeCard({ variante = 'completa', onClose }: Props) {
         ) : null}
       </View>
 
-      {/* El atleta ve lo mismo que el entrenador, pero contado en días: lo que
-          compró con el euro y cuánto le queda. Un contador a la vista evita la
-          sorpresa del último día, que es cuando se pierde a la gente. */}
+      {/* Solo para las cuentas antiguas que siguen en su prueba de 28 días:
+          con el modelo nuevo no hay prueba, y `diasRestantes` solo tiene valor
+          mientras la haya. Un contador a la vista evita la sorpresa del último
+          día, que es cuando se pierde a la gente. */}
       {esAtleta && diasRestantes !== null ? (
         <View style={styles.plazas}>
           <View style={styles.plazasFila}>
-            <Text style={styles.plazasTitulo}>Tu alta incluye {TRIAL_DAYS} días</Text>
+            <Text style={styles.plazasTitulo}>Tu prueba dura {TRIAL_DAYS} días</Text>
             <Text
               style={[styles.plazasCuenta, diasRestantes <= 3 && { color: colors.warning }]}
             >
@@ -241,17 +248,16 @@ export function UpgradeCard({ variante = 'completa', onClose }: Props) {
       ) : null}
 
       {/* Lo primero que ve el entrenador es lo que YA tiene, no lo que le
-          falta: el euro que pagó incluye plazas de verdad y son suyas para
-          siempre. Enseñar el contador es a la vez lo más honesto y lo más
-          persuasivo — el que va por 4 de 5 sabe exactamente qué está a punto
-          de necesitar. */}
+          falta: su primer año incluye plazas de verdad. Enseñar el contador es
+          a la vez lo más honesto y lo más persuasivo — el que va por 4 de 5
+          sabe exactamente qué está a punto de necesitar. */}
       {!esAtleta ? (
         <View style={styles.plazas}>
           <View style={styles.plazasFila}>
             <Text style={styles.plazasTitulo}>
               {plazas === 0
-                ? 'Tu alta no incluye alumnos'
-                : frase`Tu alta incluye ${plazas} alumnos`}
+                ? 'Tu plan no incluye alumnos'
+                : frase`Tu plan incluye ${plazas} alumnos`}
             </Text>
             {plazas > 0 ? (
               <Text style={[styles.plazasCuenta, lleno && { color: colors.warning }]}>
@@ -271,10 +277,10 @@ export function UpgradeCard({ variante = 'completa', onClose }: Props) {
           ) : null}
           <Text style={styles.plazasPie}>
             {plazas === 0
-              ? 'El alta de tu tarjeta ya se usó en otra cuenta de entrenador.'
+              ? 'Tu tarjeta ya gastó sus plazas en otra cuenta de entrenador.'
               : lleno
-                ? frase`Están todas ocupadas. Los ${plazas} que ya tienes siguen contigo pagues o no; para aceptar al ${plazas + 1} hace falta el plan.`
-                : frase`Son tuyas para siempre, sin caducidad. Del alumno ${plazas + 1} en adelante hace falta el plan.`}
+                ? frase`Están todas ocupadas. Para aceptar al alumno ${plazas + 1} hace falta el plan sin tope.`
+                : frase`Del alumno ${plazas + 1} en adelante hace falta el plan sin tope.`}
           </Text>
         </View>
       ) : null}
@@ -312,7 +318,7 @@ export function UpgradeCard({ variante = 'completa', onClose }: Props) {
           {/* Y lo que NO cambia, que es casi todo. Va explícito porque es la
               diferencia entre "te falta la mitad del producto" y "tienes el
               producto entero, y lo que compras es sitio". */}
-          <Text style={styles.seccion}>Ya lo tienes con tu alta</Text>
+          <Text style={styles.seccion}>Ya lo tienes con tu año</Text>
           {yaIncluido.map((v) => (
             <View key={v} style={styles.ventaja}>
               <Ionicons name="checkmark-circle" size={15} color={colors.textMuted} />
@@ -321,29 +327,36 @@ export function UpgradeCard({ variante = 'completa', onClose }: Props) {
           ))}
           <Text style={styles.aclara}>
             El plan no desbloquea funciones: las tienes todas desde el primer
-            día. Lo que quita es el tope de alumnos.
+            día. Lo único que quita es el tope de alumnos.
           </Text>
         </>
       ) : null}
 
-      {/* El atleta elige entre el año y el mes; el entrenador solo tiene anual.
-          Y a él se le sigue enseñando UN botón, no una decisión falsa. */}
+      {/* Los dos ven un solo botón: se paga por años y no hay nada que
+          elegir. Fingir una decisión donde no la hay solo hace la pantalla
+          más lenta. */}
       {esAtleta ? (
         <>
-          {/* Va JUSTO encima de las dos opciones, no suelto más arriba: lo que
-              dice es sobre la elección que viene a continuación, y a media
-              tarjeta de distancia no se lee como parte de ella. */}
-          <Text style={styles.pie}>{facturacion}</Text>
+          {/* Va JUSTO encima del botón, no suelto más arriba: lo que dice es
+              sobre el paso que viene a continuación, y a media tarjeta de
+              distancia no se lee como parte de él.
+
+              Y solo si hay botón. Sin enlace configurado `ElegirPlan` no pinta
+              nada, y esta frase se quedaba sola al final de la tarjeta
+              hablando de un paso que no estaba por ninguna parte. */}
+          {url ? <Text style={styles.pie}>{facturacion}</Text> : null}
           <ElegirPlan
             profile={profile}
-            nota="Si prefieres esperar, no pasa nada: te avisaremos antes de que termine la prueba."
+            nota="Se paga una vez y te olvidas del contador hasta el año que viene."
           />
         </>
       ) : (
         <>
           {url ? (
             <Pressable onPress={abrir} style={styles.boton}>
-              <Text style={styles.botonTexto}>Activar el plan anual</Text>
+              <Text style={styles.botonTexto}>
+                {caducado ? 'Renovar mi cuenta' : 'Pasar al plan sin tope'}
+              </Text>
             </Pressable>
           ) : null}
           {/* Cómo se cobra va aquí, pegado al botón: es lo último que se lee
@@ -351,8 +364,9 @@ export function UpgradeCard({ variante = 'completa', onClose }: Props) {
               frase entera y no un trozo pegado a una variable, porque el
               diccionario traduce por frase completa. */}
           <Text style={styles.nota}>
-            Se cobra una vez al año. Mientras no lo actives no se te cobra nada, y tus
-            alumnos actuales siguen igual.
+            {caducado
+              ? 'Se cobra una vez al año e incluye la app entera sin tope de alumnos. Tu grupo y tu trabajo te esperan intactos.'
+              : 'Se cobra una vez al año. Mientras no lo actives no se te cobra nada, y tus alumnos actuales siguen igual.'}
           </Text>
         </>
       )}

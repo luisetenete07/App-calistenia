@@ -5,27 +5,46 @@ más problemas da— **dónde se puede enseñar un precio y dónde no**.
 
 ---
 
-## 1 · Los tres cobros
+## 1 · Los cuatro cobros
 
 | Qué | Cuánto | Quién | Dónde se cobra |
 | --- | --- | --- | --- |
-| **Alta** | 1 €, una vez | entrenador y atleta | web (`pagos.altaCoach` / `pagos.altaAtleta`) o app (`COACH_ENTRY_LINK` / `ATHLETE_ENTRY_LINK`) |
-| **Plan del entrenador** | 180 €/año | entrenador con más de 5 alumnos | app (`COACH_PAYMENT_LINK`) |
-| **Plan del atleta** | 10 €/mes | atleta pasados sus 28 días | app (`ATHLETE_PAYMENT_LINK`) |
+| **Primer año del entrenador** | 27 €, una vez | entrenador al entrar | web (`pagos.altaCoach`) o app (`COACH_ENTRY_LINK`) |
+| **Primer año del atleta** | 17 €, una vez | atleta al entrar | web (`pagos.altaAtleta`) o app (`ATHLETE_ENTRY_LINK`) |
+| **Plan anual del entrenador** | 180 €/año | para quitar el tope de 5 alumnos, y para seguir a partir del segundo año | app (`COACH_PAYMENT_LINK`) |
+| **Renovación del atleta** | 95 €/año | atleta a partir del segundo año | app (`ATHLETE_ANNUAL_LINK`) |
 
 El **alumno de un entrenador no le paga nada a UDECA**. Lo que le paga a su
 entrenador es cosa de los dos: la app solo lleva la cuenta.
 
-### Por qué el alta cuesta un euro
+### Por qué se entra pagando el año entero
 
-No es para hacer caja: un euro no financia nada. Es para que al entrar quede una
-**tarjeta identificada**. Stripe devuelve del pago una huella
+Antes se entraba por 1 € y el atleta tenía 28 días de prueba. Una prueba corta
+obliga a decidir justo cuando el trabajo empieza a dar resultados —en calistenia
+el primer mes es casi todo aprender a colocarse—, y esa decisión se toma con las
+manos vacías. Un año por delante cambia la pregunta: ya no es "¿me servirá?"
+sino "¿me ha servido?", y esa se responde mirando doce meses de progreso.
+
+El precio de entrada no es un descuento de marketing: es lo que cuesta el año
+que el producto necesita para demostrar lo que vale. A partir del segundo se
+paga lo que vale (180 € / 95 €).
+
+**En la web el precio se enseña por mes, con el total del año debajo y
+visible.** 2,25 €/mes se compara con lo que cuesta una hora de entrenador; 27 €
+de golpe no se comparan con nada. Pero enseñar el mensual y cobrar el anual sin
+decirlo es lo que hace que la gente pida la devolución y se vaya, así que el
+total va siempre a la vista. Lo vigila `scripts/check-precios.mjs`.
+
+### Lo que sigue comprando el pago de entrada
+
+Que al entrar quede una **tarjeta identificada**. Stripe devuelve del pago una
+huella
 (`payment_method.card.fingerprint`) que es la misma para la misma tarjeta aunque
 cambien el correo, el nombre, el móvil o la cuenta.
 
 Con eso, el agujero grande del modelo se cierra: un entrenador ya no puede
 abrir cinco cuentas de cinco alumnos cada una para no pagar los 180 €. Cuando la
-misma tarjeta paga un segundo alta de entrenador, el webhook le pone
+misma tarjeta paga un segundo primer año de entrenador, el webhook le pone
 `clientSlots: 0` a esa cuenta: entra, pero sin alumnos incluidos. Al que va de
 frente no le cuesta ni un paso más, porque ya estaba metiendo la tarjeta.
 
@@ -79,10 +98,16 @@ alguien que iba a pagar en alguien que se va.
 El hito se marca aunque no salga ningún aviso (ni push ni correo). Si no, se
 reintentaría a diario con quien no tiene ninguno de los dos.
 
-### Cuándo empiezan los 28 días del atleta
+### Cuándo empieza el primer año
 
-Al pagar el alta, no al registrarse (lo escribe `activarAlta` en el webhook).
-Si alguien tarda dos días en pagar el euro, no pierde dos días de prueba.
+Al pagar, no al registrarse (lo escribe `aplicarAlta` en `_alta.js`). Si alguien
+tarda dos días en pagar, no pierde dos días de año. Vale para los **dos roles**:
+el entrenador también compra su año al entrar, y sin eso su cuenta entraría
+caducada y vería el muro de pago con el año recién pagado.
+
+No se escribe `trialEndsAt`: un año pagado no es una prueba, y ese campo es lo
+que hace que la app diga "estás de prueba" y que la tarea diaria mande los
+avisos de prueba.
 
 ### Quién no ve nunca el muro del alta
 
@@ -137,9 +162,9 @@ En Android, web y APK no cambia nada: se cobra con normalidad.
 1. Si es una **suscripción**, extiende `subscriptionUntil` hasta el fin del
    periodo pagado y escribe `subscriptionPlan`.
 2. Si es un **pago suelto**, mira el rol de quien paga:
-   - entrenador o atleta → es el alta: escribe `entryPaidAt`, guarda la huella
-     de la tarjeta, reparte (o no) las plazas de alumno y, si es atleta, arranca
-     sus 28 días.
+   - entrenador o atleta → es el primer año: escribe `entryPaidAt`, guarda la
+     huella de la tarjeta, reparte (o no) las plazas de alumno y pone
+     `subscriptionUntil` a 365 días.
    - alumno → es la cuota que le paga a su entrenador.
 
 Todos los eventos son idempotentes (colección `stripeEvents`): Stripe reenvía, y
@@ -153,7 +178,7 @@ anual.
 
 Antes se deducía del rol —"el entrenador paga al año y el atleta al mes"—, y esa
 regla dejó de ser verdad el día que el atleta pudo pagar el año por delante:
-quien pagaba los 96 € se quedaba con el plan en blanco o con "mensual" escrito.
+quien pagaba el año se quedaba con el plan en blanco o con "mensual" escrito.
 Lo mismo pasaba en el panel del CEO al darle un año a un atleta.
 
 No decide el acceso —eso lo decide `subscriptionUntil`—, así que el fallo no se
@@ -191,30 +216,37 @@ cuenta no se activa nunca**. Sin ningún error y con el dinero ya cobrado.
 **Si algún día se cambia de perfil o de cuenta de Stripe, hay que mover LAS DOS
 COSAS a la vez**: los enlaces del repositorio y las dos claves de Vercel.
 
-### Los cinco enlaces
+### Los cuatro enlaces
 
 | Producto | Payment Link |
 |---|---|
-| Alta de atleta · 1 € | `https://buy.stripe.com/4gMdR8gL50UbbgY9nu3sI01` |
-| Plan de atleta · 10 €/mes | `https://buy.stripe.com/5kQ3cudyT8mDetafLS3sI03` |
-| Plan de atleta · 96 €/año | `https://buy.stripe.com/3cIdR866rcCT98Q9nu3sI05` |
-| Alta de entrenador · 1 € | `https://buy.stripe.com/5kQeVc8ezdGX84MbvC3sI00` |
+| Primer año de atleta · 17 € | *pendiente* |
+| Primer año de entrenador · 27 € | *pendiente* |
+| Renovación de atleta · 95 €/año | *pendiente* |
 | Plan de entrenador · 180 €/año | `https://buy.stripe.com/eVqcN4cuP9qH70IgPW3sI02` |
 
-### Por qué 96 y no 95
+**Los pendientes están VACÍOS a propósito** (`''` en `lib/enlacesDeCobro.ts` y
+`/proximamente` en `web/config.js`). Los precios cambiaron y los Payment Links
+con los importes nuevos todavía no existen; dejar los antiguos habría sido lo
+peligroso, porque la web diría 17 € y la pasarela cobraría 1 € sin dar ningún
+error a nadie. Vacío se comporta solo: `entryCheckoutUrl` devuelve `null` y el
+botón no se enseña.
 
-96 entre 12 son **8,00 € exactos**, y "8 € al mes pagando el año" se lee de un
-vistazo. 95 salen a 7,92, que ni se recuerda ni cabe en un titular. El descuento
-es del 20%, dentro del estándar (17-25%).
+Mientras estén así, **nadie puede darse de alta**: ni en la web ni en la app. Se
+crean en Stripe → Payments → Payment Links, en modo producción, y se pegan en
+los dos sitios a la vez (`scripts/check-stripe.mjs` se queja si se separan).
 
-Y el anual no regala margen: **un atleta mensual tiene que aguantar diez meses
-para dejar lo que el anual deja el primer día**, contando IVA y comisiones. En
-una app de entrenamiento la mayoría no llega a seis. Además quita once cobros
-que pueden fallar.
+### Los números, y de dónde salen
 
-La app **no enseña ninguno de estos importes**: solo el ahorro en porcentaje, y
-calculado a partir de los dos precios (`AHORRO_ANUAL_PCT`), nunca escrito a
-mano. El porqué está en `lib/subscription.ts`.
+Los cuatro precios viven en `lib/precios.ts` —fuera de `subscription.ts` para
+que se puedan leer sin arrancar React Native— y de ahí salen **calculados** el
+precio por mes y el ahorro del primer año. Nunca se escriben a mano: una cifra
+escrita aparte se queda vieja el día que cambie el precio, y entonces la página
+promete un número y la pasarela cobra otro.
+
+La app **no enseña ninguno de estos importes** en ningún idioma
+(`scripts/check-sin-precios.mjs`). El porqué está en `lib/subscription.ts`; el
+escaparate es la web.
 
 ### En iPhone no se cobra, y es a propósito
 
@@ -225,7 +257,7 @@ a comprobarla; el cobro va por la web. Ver docs/TIENDAS.md.
 
 ### Si hay que apagarlo otra vez
 
-`PAGOS_ACTIVOS = false` y vaciar los cinco enlaces de `lib/enlacesDeCobro.ts` (y dejar `web/config.js`
+`PAGOS_ACTIVOS = false` y vaciar los cuatro enlaces de `lib/enlacesDeCobro.ts` (y dejar `web/config.js`
 apuntando a `/proximamente`). Van juntos: en la app un enlace suelto es
 inofensivo porque manda `CAN_LINK_TO_PAYMENT`, pero `web/config.js` no mira
 ningún interruptor y ahí un enlace es un cobro real. `check-stripe.mjs` no deja
@@ -297,7 +329,9 @@ solo en Vercel.
 
 ### Qué se envía hoy
 
-Solo el aviso de fin de prueba del atleta (a 3 días y el último día). Los demás
+Solo el aviso de que se acaba el acceso (a 14, 3 y 1 días), para el atleta y
+para el entrenador. No se le manda a quien tiene suscripción recurrente en
+Stripe: a ese le renueva la tarjeta sola. Los demás
 recordatorios —inactividad, cuota— siguen siendo solo push: son de trato diario
 entre entrenador y alumno, y un correo por cada uno se lee como spam propio.
 

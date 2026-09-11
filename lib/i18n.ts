@@ -2250,6 +2250,63 @@ export const EN: Record<string, string> = {
     'If you would rather wait, that is fine: we will let you know before the trial ends.',
   'Se cobra una vez al año. Mientras no lo actives no se te cobra nada, y tus alumnos actuales siguen igual.':
     'Charged once a year. Until you activate it you are charged nothing, and your current students carry on as they are.',
+  // --- El modelo del primer año (27 € entrenador / 17 € atleta) ---
+  //
+  // Sin importes, como todo lo demás: la app no dice precios en ningún idioma
+  // (ver lib/subscription.ts). Lo que se traduce es la promesa, que es lo que
+  // de verdad cambia: ya no son días de prueba, es un año por delante.
+  'Entrenas por tu cuenta. Entras con un año entero por delante.':
+    'You train on your own. You come in with a full year ahead.',
+  'Entrenas por tu cuenta: tus rutinas, tu progreso y tu nutrición. Entras con un año entero por delante.':
+    'You train on your own: your routines, your progress and your nutrition. You come in with a full year ahead.',
+  'Con tu entrenador o por tu cuenta, con un año entero por delante. Y si entrenas a otros, empiezas con ':
+    'With your coach or on your own, with a full year ahead. And if you train others, you start with ',
+  'Entras con un año entero por delante. Al terminarlo decides si sigues.':
+    'You come in with a full year ahead. When it ends, you decide whether to carry on.',
+  'Tu primer año incluye {0} alumnos con su propia cuenta. Si tu grupo crece, pasas al plan sin tope.':
+    'Your first year includes {0} students with their own account. If your group grows, you move to the plan with no cap.',
+  'Tu plan incluye {0} alumnos. Pasa al plan sin tope para aceptar a más.':
+    'Your plan includes {0} students. Move to the plan with no cap to accept more.',
+  'Tu plan incluye {0} alumnos': 'Your plan includes {0} students',
+  'Tu plan no incluye alumnos': 'Your plan includes no students',
+  'Tu tarjeta ya gastó sus plazas en otra cuenta de entrenador, así que esta entra sin plazas. Con el plan sin tope tienes alumnos ilimitados.':
+    'Your card already used up its places on another coach account, so this one comes with none. With the plan that has no cap you get unlimited students.',
+  'Tu tarjeta ya gastó sus plazas en otra cuenta de entrenador.':
+    'Your card already used up its places on another coach account.',
+  'Ya llevas {0} de {1}. Del alumno {2} en adelante hace falta el plan, y el grupo deja de tener tope.':
+    "You're at {0} of {1}. From student {2} onwards you need the plan, and the group stops having a cap.",
+  'Están todas ocupadas. Para aceptar al alumno {0} hace falta el plan sin tope.':
+    'They are all taken. To accept student {0} you need the plan with no cap.',
+  'Del alumno {0} en adelante hace falta el plan sin tope.':
+    'From student {0} onwards you need the plan with no cap.',
+  'Ya lo tienes con tu año': 'Already yours with your year',
+  'El plan no desbloquea funciones: las tienes todas desde el primer día. Lo único que quita es el tope de alumnos.':
+    'The plan does not unlock features: you have them all from day one. The only thing it removes is the cap on students.',
+  'Tu prueba dura ': 'Your trial lasts ',
+  'Pasar al plan sin tope': 'Move to the plan with no cap',
+  'Renovar mi cuenta': 'Renew my account',
+  'Se cobra una vez al año e incluye la app entera sin tope de alumnos. Tu grupo y tu trabajo te esperan intactos.':
+    'Charged once a year, and it includes the whole app with no cap on students. Your group and your work are waiting for you, untouched.',
+  'Un año entero, la app completa y sin recortes.':
+    'A full year, the complete app, nothing held back.',
+  'Se paga una vez y te olvidas del contador hasta el año que viene.':
+    'Pay once and forget the countdown until next year.',
+  'Tu grupo sin tope de alumnos y la app entera, doce meses. Se paga una vez.':
+    'Your group with no cap on students and the whole app, twelve months. Paid once.',
+  'Tu año ha terminado': 'Your year is over',
+  'Renueva tu cuenta de entrenador': 'Renew your coach account',
+  'Ya has hecho la parte difícil: un año entrenando. Todo tu progreso sigue aquí, intacto, esperándote. Renueva y sigue donde lo dejaste.':
+    "You've already done the hard part: a year of training. All your progress is still here, untouched, waiting for you. Renew and carry on where you left off.",
+  'Esta cuenta no incluye alumnos: su tarjeta ya gastó las plazas en otra cuenta de entrenador. Con el plan anual tienes alumnos ilimitados. Tus datos están a salvo y te esperan.':
+    'This account includes no students: that card already used up its places on another coach account. With the annual plan you get unlimited students. Your data is safe and waiting for you.',
+  'Para seguir llevando a tu grupo hace falta el plan anual, con alumnos ilimitados y la app entera. Tus alumnos, sus rutinas y su historial están a salvo y te esperan.':
+    'To keep running your group you need the annual plan, with unlimited students and the whole app. Your students, their routines and their history are safe and waiting for you.',
+  'Hoy se te acaba el año': 'Your year ends today',
+  'Te quedan {0} días de acceso': '{0} days of access left',
+  'Renueva y sigue con todo tu progreso y tus alumnos.':
+    'Renew and carry on with all your progress and your students.',
+  'Renovar': 'Renew',
+
   'Tu plan de atleta': 'Your athlete plan',
   'Tu plan de entrenador': 'Your coach plan',
   'Así funciona tu prueba': 'How your trial works',

@@ -8,15 +8,37 @@ import { colors, fonts, radius, spacing, typography } from '../lib/theme';
 import type { UserProfile } from '../lib/types';
 
 /**
- * Aviso de la prueba gratuita. No bloquea nada: informa de los días que quedan
- * y deja el pago a un toque, para que la decisión se tome habiendo usado ya la
- * app y sin tener que ir a buscarla. Desaparece en cuanto se paga.
+ * Días con antelación con los que se avisa de que se acaba el año pagado.
+ *
+ * Los mismos que usa la tarea diaria del servidor (TRIAL_NUDGE_DAYS empieza en
+ * 14, en payments-webhook/api/cron-daily.js). Que coincidan no es casualidad:
+ * el correo y la app tienen que contar lo mismo el mismo día, o parece que una
+ * de las dos se ha equivocado.
+ */
+const AVISO_DIAS = 14;
+
+/**
+ * Aviso de que el acceso se acaba. No bloquea nada: informa de los días que
+ * quedan y deja el pago a un toque, para que la decisión se tome habiendo
+ * usado ya la app y sin tener que ir a buscarla. Desaparece al renovar.
+ *
+ * Cubre DOS casos, y la diferencia importa al leerlo:
+ *  - La prueba de una cuenta antigua: se avisa desde el primer día, porque el
+ *    plazo entero es corto y el contador es parte de lo que se contrató.
+ *  - El año pagado del modelo nuevo: solo en las dos últimas semanas. Enseñar
+ *    "te quedan 300 días" a alguien que acaba de pagar su año es recordarle
+ *    todos los días que esto se acaba, y no hay nada que decidir todavía.
+ *
+ * Quien tiene suscripción recurrente en Stripe no ve nada: a ese le renueva la
+ * tarjeta sola, y avisarle de que se queda fuera sería falso.
  */
 export function TrialBanner({ profile }: { profile: UserProfile | null }) {
   const sub = subscriptionState(profile);
-  if (!sub.trial || !sub.active) return null;
+  if (!sub.active || sub.daysLeft === null) return null;
+  if (profile?.stripeSubscriptionId) return null;
 
-  const days = sub.daysLeft ?? 0;
+  const days = sub.daysLeft;
+  if (!sub.trial && days > AVISO_DIAS) return null;
   // El botón depende de si se puede enlazar a pagar (ver CAN_LINK_TO_PAYMENT):
   // el aviso se queda en informar de los días que quedan.
   const url = CAN_LINK_TO_PAYMENT ? subscriptionCheckoutUrl(profile) : null;
@@ -32,17 +54,25 @@ export function TrialBanner({ profile }: { profile: UserProfile | null }) {
       />
       <View style={{ flex: 1 }}>
         <Text style={styles.title}>
-          {days <= 1 ? 'Último día de prueba' : frase`Te quedan ${days} días de prueba`}
+          {sub.trial
+            ? days <= 1
+              ? 'Último día de prueba'
+              : frase`Te quedan ${days} días de prueba`
+            : days <= 1
+              ? 'Hoy se te acaba el año'
+              : frase`Te quedan ${days} días de acceso`}
         </Text>
         <Text style={styles.subtitle}>
           {url
-            ? 'Actívala y sigue con todo tu progreso y tus alumnos.'
+            ? sub.trial
+              ? 'Actívala y sigue con todo tu progreso y tus alumnos.'
+              : 'Renueva y sigue con todo tu progreso y tus alumnos.'
             : 'Tu progreso se queda contigo pase lo que pase.'}
         </Text>
       </View>
       {url ? (
         <Pressable onPress={() => Linking.openURL(url)} style={styles.action} hitSlop={6}>
-          <Text style={styles.actionText}>Activar</Text>
+          <Text style={styles.actionText}>{sub.trial ? 'Activar' : 'Renovar'}</Text>
         </Pressable>
       ) : null}
     </View>

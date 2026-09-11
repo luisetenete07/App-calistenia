@@ -127,18 +127,32 @@ sitio de captación.
 Todo lo configurable de la web pública está en **`web/config.js`**, en un solo
 sitio y en castellano:
 
-- `pagos.altaAtleta` y `pagos.altaCoach` — los dos Payment Links del **alta de
-  1 €** (pago único), uno por rol para saber quién se da de alta.
+- `pagos.altaAtleta` y `pagos.altaCoach` — los dos Payment Links del **primer
+  año** (pago único): 17 € el atleta y 27 € el entrenador, uno por rol para
+  saber quién entra.
 
   **Los mismos dos enlaces van también en la app**, en
-  `lib/subscription.ts` → `ATHLETE_ENTRY_LINK` y `COACH_ENTRY_LINK`. La web los
-  usa para quien llega de fuera y la app para quien se registró sin pasar por
-  ella; si cambias uno, cambia el otro. Mientras estén vacíos, el muro de la app
-  ofrece escribir un correo en vez de dejar al usuario sin salida.
+  `lib/enlacesDeCobro.ts` → `ATHLETE_ENTRY_LINK` y `COACH_ENTRY_LINK`. La web
+  los usa para quien llega de fuera y la app para quien se registró sin pasar
+  por ella; si cambias uno, cambia el otro (`scripts/check-stripe.mjs` se queja
+  si se separan). Mientras estén vacíos, el muro de la app ofrece escribir un
+  correo en vez de dejar al usuario sin salida, y la web manda a
+  `/proximamente`.
 
-  Lo que viene después (180 €/año del entrenador, 10 €/mes del atleta) se cobra
-  desde la app con `COACH_PAYMENT_LINK` / `ATHLETE_PAYMENT_LINK`, que ahora
-  apuntan a los de **prueba**: al pasar a producción, pega los `live`.
+  **Ahora mismo están así**: los precios cambiaron y los Payment Links con los
+  importes nuevos todavía no existen, así que por la web no se puede pagar. Los
+  antiguos se quitaron a propósito: cobraban 1 € por lo que la página anuncia a
+  17.
+
+  Lo que viene después (180 €/año del entrenador sin tope de alumnos, 95 €/año
+  del atleta al renovar) se cobra desde la app con `COACH_PAYMENT_LINK` /
+  `ATHLETE_ANNUAL_LINK`.
+
+- **Los precios escritos en `web/index.html`** salen de `lib/precios.ts`, que es
+  donde están de verdad. El titular es el precio **por mes** y el total del año
+  va debajo, en pequeño pero visible. `scripts/check-precios.mjs` comprueba que
+  las dos copias digan lo mismo y que las cuentas cuadren: es la comprobación
+  que evita que la página anuncie un precio y la pasarela cobre otro.
 - `descargas.appStore`, `descargas.playStore`, `descargas.apkPc` — déjalos
   vacíos hasta que la ficha exista. Vacío = la tarjeta se queda en
   "Próximamente" y no lleva a un 404; con enlace = pasa sola a "Disponible".

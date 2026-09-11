@@ -20,90 +20,61 @@ import {
 export {
   ATHLETE_ANNUAL_LINK,
   ATHLETE_ENTRY_LINK,
-  ATHLETE_PAYMENT_LINK,
   COACH_ENTRY_LINK,
   COACH_PAYMENT_LINK,
   entryCheckoutUrl,
   subscriptionCheckoutUrl,
-  type PlanElegido,
 } from './enlacesDeCobro';
 
 /**
- * Modelo SaaS de UDECA: los COACHES pagan la plataforma; sus alumnos entran
- * gratis con el código del coach.
+ * Modelo de UDECA: paga quien usa la plataforma por su cuenta —el entrenador y
+ * el atleta— y los alumnos de un entrenador entran gratis con su código.
  *
- *  - ALTA: 1 € una sola vez, al registrarse, tanto entrenador como atleta.
- *    No es el precio del producto: es el peaje que filtra al curioso y —lo
- *    importante— deja una TARJETA identificada. Ver `ENTRY_PRICE_EUR`.
- *  - ENTRENADOR: con el alta pagada entran FREE_CLIENT_LIMIT alumnos. Para
- *    pasar de ahí, 180 €/año. Entra y usa la app entera desde el primer día;
- *    el muro solo aparece cuando su grupo crece. Pedirle 180 € antes de haber
- *    visto el producto era el mayor punto de fuga del negocio.
- *  - ATLETA: TRIAL_DAYS desde el alta y después 10 €/mes.
+ *  - ENTRADA: el PRIMER AÑO ENTERO, pago único. 27 € el entrenador, 17 € el
+ *    atleta. No es una prueba: son doce meses con la app completa. El pago con
+ *    tarjeta deja además una huella identificada, que es lo que impide que un
+ *    entrenador se reparta en cuentas de cinco alumnos para no pagar el plan.
+ *  - ENTRENADOR: su primer año incluye FREE_CLIENT_LIMIT alumnos. Para pasar
+ *    de ahí, el plan anual de 180 €, que quita el tope y se puede contratar
+ *    desde el primer día. Al terminar el año es la única forma de seguir.
+ *  - ATLETA: al terminar su año, renueva por 95 € anuales.
  *  - ALUMNO de un coach: gratis siempre.
  *  - Cuentas sin `subscriptionUntil` = fundadoras (anteriores a la
  *    monetización): acceso completo para no romper nada.
+ *  - Cuentas anteriores al 11-09-2026 conservan sus condiciones antiguas (ver
+ *    `conModeloDePrimerAno` en planBase.ts): cambiar las reglas a mitad de
+ *    partida a quien ya estaba dentro es perder a los primeros.
  *  - La activación la hace Stripe (o el admin desde su panel); las reglas de
  *    Firestore impiden que un coach se extienda la suscripción a sí mismo.
  */
 
 /**
- * Alta única, en euros.
+ * LOS PRECIOS viven en lib/precios.ts y se reexportan aquí.
  *
- * Un euro no financia nada: financia la IDENTIFICACIÓN. Al cobrarlo con
- * tarjeta, Stripe devuelve una huella del medio de pago que es la misma para
- * la misma tarjeta en cualquier cuenta, correo o dispositivo. Es lo que
- * permite que un entrenador no pueda multiplicarse en cuentas de cinco alumnos
- * para no pagar los 180 €, y no cuesta ni un paso más al que va de frente:
- * ya estaba metiendo la tarjeta.
+ * EL MODELO, EN TRES FRASES
+ *
+ *  - Se entra pagando el PRIMER AÑO ENTERO, una sola vez: 27 € el entrenador,
+ *    17 € el atleta. Doce meses por delante, sin nada más que decidir.
+ *  - Al terminar ese año hay que renovar: 180 € el entrenador, 95 € el atleta.
+ *    Sin renovar, la cuenta de entrenador no se puede usar.
+ *  - El entrenador puede pasarse al plan de 180 € cuando quiera, también
+ *    durante el primer año: es el que quita el tope de cinco alumnos.
  */
-export const ENTRY_PRICE_EUR = 1;
-export const ANNUAL_PRICE_EUR = 180;
-/**
- * Lo que sale al mes el plan del entrenador.
- *
- * Se enseña este número y no los 180 porque es el que se compara con lo que
- * cobra por UN alumno: 180 de golpe parece una inversión, 15 al mes parece lo
- * que es. Debajo va SIEMPRE, sin excepción, que el cobro es anual y de una
- * vez: enseñar el mensual y cobrar el anual sin decirlo es lo que hace que la
- * gente pida la devolución y se vaya.
- */
-export const COACH_MONTHLY_EQUIV_EUR = Math.round(ANNUAL_PRICE_EUR / 12);
-
-/** Atleta individual: cuota mensual (suelta, no anual). */
-export const ATHLETE_MONTHLY_EUR = 10;
-
-/**
- * Atleta que paga el año por delante.
- *
- * Son 96 y no 95 por una razón de escaparate: 96 entre 12 son 8,00 € exactos,
- * y "8 € al mes pagando el año" se lee de un vistazo. 95 salen a 7,92, que no
- * se recuerda ni cabe bien en un titular.
- *
- * Y no es un descuento por serlo: un atleta que paga al mes tiene que aguantar
- * DIEZ MESES para dejar lo mismo que este deja el primer día, contando IVA y
- * comisiones. En una app de entrenamiento, la mayoría no llega a seis. El
- * anual no regala margen: cobra por adelantado lo que probablemente no se
- * llegaría a cobrar, y de paso quita once cobros que pueden fallar.
- */
-export const ATHLETE_ANNUAL_EUR = 96;
+export {
+  AHORRO_PRIMER_ANO_ATLETA_PCT,
+  AHORRO_PRIMER_ANO_COACH_PCT,
+  ANNUAL_PRICE_EUR,
+  ATHLETE_ANNUAL_EUR,
+  ATHLETE_FIRST_YEAR_EUR,
+  ATHLETE_FIRST_YEAR_MONTHLY_EUR,
+  ATHLETE_MONTHLY_EQUIV_EUR,
+  COACH_FIRST_YEAR_EUR,
+  COACH_FIRST_YEAR_MONTHLY_EUR,
+  COACH_MONTHLY_EQUIV_EUR,
+} from './precios';
 
 /**
- * Lo que se ahorra pagando el año, en porcentaje.
- *
- * CALCULADO, NUNCA ESCRITO A MANO. Es el único número sobre dinero que la app
- * enseña (ver el bloque de "LA APP NO DICE PRECIOS"), y se salva de esa regla
- * porque no es un precio: es una proporción entre dos, y mientras los dos
- * cambien juntos sigue siendo verdad. Escribir "20%" a mano sería justo lo que
- * esa regla evita — una cifra que se queda vieja en la versión que el usuario
- * no ha actualizado.
- */
-export const AHORRO_ANUAL_PCT = Math.round(
-  (1 - ATHLETE_ANNUAL_EUR / (ATHLETE_MONTHLY_EUR * 12)) * 100
-);
-
-/**
- * Estas cuatro viven en lib/planBase.ts y se reexportan aquí.
+ * Estas viven en lib/planBase.ts y se reexportan aquí.
  *
  * El motivo: este fichero lee `Platform.OS` al cargarse, así que todo lo que
  * lo importe arrastra React Native entera y no se puede probar en Node pelado.
@@ -114,11 +85,16 @@ export {
   accesoIlimitado,
   ADMIN_EMAILS,
   clientSlotsOf,
+  conModeloDePrimerAno,
   CUENTAS_ILIMITADAS,
   DAY_MS,
   ENTRY_REQUIRED_FROM,
   FREE_CLIENT_LIMIT,
   needsEntryPayment,
+  planIlimitado,
+  PRIMER_ANO_DESDE,
+  PRIMER_ANO_DIAS,
+  primerAnoHasta,
   TRIAL_DAYS,
   trialUntil,
   CLIENT_GRACE_DAYS,
