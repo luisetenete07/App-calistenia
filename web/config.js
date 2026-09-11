@@ -10,32 +10,30 @@ window.UDECA = {
   appUrl: 'https://app.udeca.app',
 
   /**
-   * Enlaces de pago del primer año.
+   * Enlaces de pago del primer año: 17 € el atleta y 27 € el entrenador.
    *
-   * AHORA MISMO LLEVAN A /proximamente, Y ESO ES A PROPÓSITO.
+   * Son PRODUCCIÓN (`buy.stripe.com/…`, sin `test_`). Un enlace de prueba abre
+   * la pasarela, acepta la tarjeta, da las gracias y no cobra nada: quien
+   * pulsara se quedaría convencido de haber pagado.
    *
-   * Los precios han cambiado —17 € el atleta y 27 € el entrenador, el primer
-   * año entero— y los Payment Links de Stripe con esos importes todavía no
-   * existen. Dejar aquí los antiguos habría sido lo peligroso: la página dice
-   * 17 € y la pasarela cobra 1 €, sin dar ningún error a nadie. Un enlace
-   * equivocado no se nota al probarlo —se abre, la tarjeta pasa, la cuenta se
-   * activa— y se descubre mirando las cuentas del mes.
+   * Son también los MISMOS dos que van en lib/enlacesDeCobro.ts
+   * (`ATHLETE_ENTRY_LINK` / `COACH_ENTRY_LINK`): la web los usa para quien
+   * llega de fuera y la app para quien se registró sin pasar por ella. Si
+   * cambias uno, cambia el otro — scripts/check-stripe.mjs se queja si se
+   * separan, y ese día la mitad de las altas irían a un producto y la otra
+   * mitad a otro.
    *
-   * CUANDO ESTÉN LOS ENLACES NUEVOS
-   *
-   * Se crean dos Payment Links en Stripe (Payments → Payment Links), uno por
-   * rol para saber quién entra, y se pegan aquí los de PRODUCCIÓN
-   * (`buy.stripe.com/…`, sin `test_`). Son los MISMOS dos que van en
-   * lib/enlacesDeCobro.ts: si cambias uno, cambia el otro —
-   * scripts/check-stripe.mjs se queja si se separan.
+   * Si alguna vez hay que retirarlos, se dejan en '/proximamente' —nunca con
+   * un enlace de otro importe—: esa página explica que el cobro no está
+   * abierto en vez de cobrar un precio que no es el que anuncia la página.
    *
    * Lo que viene después (los 180 €/año del entrenador sin tope de alumnos y
-   * los 95 €/año del atleta al renovar) se cobra DESDE LA APP, cuando toca, no
+   * los 96 €/año del atleta al renovar) se cobra DESDE LA APP, cuando toca, no
    * aquí: nadie renueva un año antes de haberlo usado.
    */
   pagos: {
-    altaAtleta: '/proximamente',
-    altaCoach: '/proximamente',
+    altaAtleta: 'https://buy.stripe.com/00w14mamH9qHetafLS3sI06',
+    altaCoach: 'https://buy.stripe.com/28E4gy8ezcCT70I43a3sI07',
   },
 
   /**

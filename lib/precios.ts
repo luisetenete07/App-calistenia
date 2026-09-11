@@ -65,8 +65,15 @@ export const ATHLETE_FIRST_YEAR_EUR = 17;
  */
 export const ANNUAL_PRICE_EUR = 180;
 
-/** Atleta: la cuota anual a partir del segundo año. */
-export const ATHLETE_ANNUAL_EUR = 95;
+/**
+ * Atleta: la cuota anual a partir del segundo año.
+ *
+ * NOVENTA Y SEIS Y NO NOVENTA Y CINCO, a propósito: 96 entre 12 son 8,00 €
+ * exactos, y "8 € al mes pagando el año" se lee de un vistazo. 95 salen a 7,92,
+ * que ni se recuerda ni cabe en un titular. El euro de diferencia no lo nota
+ * nadie; el titular sí.
+ */
+export const ATHLETE_ANNUAL_EUR = 96;
 
 /**
  * Lo que sale al mes cada precio.
@@ -74,7 +81,7 @@ export const ATHLETE_ANNUAL_EUR = 95;
  * CALCULADO, NUNCA ESCRITO A MANO. Un mensual escrito aparte se queda viejo el
  * día que cambie el anual, y entonces la web promete un número y la pasarela
  * cobra otro. Se redondean a dos decimales porque 27/12 son 2,25 exactos pero
- * 95/12 son 7,9166…, y en un escaparate eso es 7,92.
+ * 17/12 son 1,4166…, y en un escaparate eso es 1,42.
  */
 const alMes = (anual: number): number => Math.round((anual / 12) * 100) / 100;
 

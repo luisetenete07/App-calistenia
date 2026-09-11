@@ -12,7 +12,7 @@ más problemas da— **dónde se puede enseñar un precio y dónde no**.
 | **Primer año del entrenador** | 27 €, una vez | entrenador al entrar | web (`pagos.altaCoach`) o app (`COACH_ENTRY_LINK`) |
 | **Primer año del atleta** | 17 €, una vez | atleta al entrar | web (`pagos.altaAtleta`) o app (`ATHLETE_ENTRY_LINK`) |
 | **Plan anual del entrenador** | 180 €/año | para quitar el tope de 5 alumnos, y para seguir a partir del segundo año | app (`COACH_PAYMENT_LINK`) |
-| **Renovación del atleta** | 95 €/año | atleta a partir del segundo año | app (`ATHLETE_ANNUAL_LINK`) |
+| **Renovación del atleta** | 96 €/año | atleta a partir del segundo año | app (`ATHLETE_ANNUAL_LINK`) |
 
 El **alumno de un entrenador no le paga nada a UDECA**. Lo que le paga a su
 entrenador es cosa de los dos: la app solo lleva la cuenta.
@@ -27,7 +27,7 @@ sino "¿me ha servido?", y esa se responde mirando doce meses de progreso.
 
 El precio de entrada no es un descuento de marketing: es lo que cuesta el año
 que el producto necesita para demostrar lo que vale. A partir del segundo se
-paga lo que vale (180 € / 95 €).
+paga lo que vale (180 € / 96 €).
 
 **En la web el precio se enseña por mes, con el total del año debajo y
 visible.** 2,25 €/mes se compara con lo que cuesta una hora de entrenador; 27 €
@@ -220,21 +220,25 @@ COSAS a la vez**: los enlaces del repositorio y las dos claves de Vercel.
 
 | Producto | Payment Link |
 |---|---|
-| Primer año de atleta · 17 € | *pendiente* |
-| Primer año de entrenador · 27 € | *pendiente* |
-| Renovación de atleta · 95 €/año | *pendiente* |
+| Primer año de atleta · 17 € | `https://buy.stripe.com/00w14mamH9qHetafLS3sI06` |
+| Primer año de entrenador · 27 € | `https://buy.stripe.com/28E4gy8ezcCT70I43a3sI07` |
+| Renovación de atleta · 96 €/año | `https://buy.stripe.com/3cIdR866rcCT98Q9nu3sI05` |
 | Plan de entrenador · 180 €/año | `https://buy.stripe.com/eVqcN4cuP9qH70IgPW3sI02` |
 
-**Los pendientes están VACÍOS a propósito** (`''` en `lib/enlacesDeCobro.ts` y
-`/proximamente` en `web/config.js`). Los precios cambiaron y los Payment Links
-con los importes nuevos todavía no existen; dejar los antiguos habría sido lo
-peligroso, porque la web diría 17 € y la pasarela cobraría 1 € sin dar ningún
-error a nadie. Vacío se comporta solo: `entryCheckoutUrl` devuelve `null` y el
-botón no se enseña.
+Los dos del primer año van **también** en `web/config.js`, y tienen que ser los
+mismos: si se separan, la mitad de las altas iría a un producto y la otra mitad
+a otro (`scripts/check-stripe.mjs` se queja).
 
-Mientras estén así, **nadie puede darse de alta**: ni en la web ni en la app. Se
-crean en Stripe → Payments → Payment Links, en modo producción, y se pegan en
-los dos sitios a la vez (`scripts/check-stripe.mjs` se queja si se separan).
+Si alguno hubiera que retirarlo, se deja **vacío** (`''` en la app,
+`/proximamente` en la web) y nunca con el enlace de otro importe: vacío se
+comporta solo —`entryCheckoutUrl` devuelve `null` y el botón no se enseña—,
+mientras que un enlace equivocado cobra otra cosa sin dar ningún error.
+
+### Por qué 96 y no 95
+
+96 entre 12 son **8,00 € exactos**, y "8 € al mes pagando el año" se lee de un
+vistazo. 95 salen a 7,92, que ni se recuerda ni cabe en un titular. El euro de
+diferencia no lo nota nadie; el titular sí.
 
 ### Los números, y de dónde salen
 

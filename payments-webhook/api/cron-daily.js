@@ -45,7 +45,7 @@ const APP_URL = 'https://app.udeca.app';
  * Lo que cuesta renovar un año, por rol (los mismos que en lib/subscription.ts:
  * ATHLETE_ANNUAL_EUR y ANNUAL_PRICE_EUR).
  */
-const RENOVACION_EUR = { athlete: 95, trainer: 180 };
+const RENOVACION_EUR = { athlete: 96, trainer: 180 };
 /** No se repite el mismo tipo de aviso antes de este plazo. */
 const NUDGE_COOLDOWN_MS = 5 * DAY_MS;
 /** Ventana de entrenamientos que se lee (suficiente para semana, mes y racha). */

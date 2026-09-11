@@ -139,12 +139,11 @@ sitio y en castellano:
   correo en vez de dejar al usuario sin salida, y la web manda a
   `/proximamente`.
 
-  **Ahora mismo están así**: los precios cambiaron y los Payment Links con los
-  importes nuevos todavía no existen, así que por la web no se puede pagar. Los
-  antiguos se quitaron a propósito: cobraban 1 € por lo que la página anuncia a
-  17.
+  Si alguno hubiera que retirarlo, se deja en `/proximamente` y nunca con el
+  enlace de otro importe: esa página explica que el cobro no está abierto, y un
+  enlace equivocado cobraría otra cosa sin dar ningún error.
 
-  Lo que viene después (180 €/año del entrenador sin tope de alumnos, 95 €/año
+  Lo que viene después (180 €/año del entrenador sin tope de alumnos, 96 €/año
   del atleta al renovar) se cobra desde la app con `COACH_PAYMENT_LINK` /
   `ATHLETE_ANNUAL_LINK`.
 

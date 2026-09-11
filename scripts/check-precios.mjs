@@ -1,6 +1,6 @@
 /*
- * Los precios: los de verdad están en lib/subscription.ts y la web tiene que
- * decir esos mismos.
+ * Los precios: los de verdad están en lib/precios.ts y la web tiene que decir
+ * esos mismos.
  *
  * POR QUÉ ESTO EXISTE
  *
@@ -25,7 +25,7 @@
  *  2. Que la web diga exactamente esas cifras, con su equivalente mensual bien
  *     calculado.
  *  3. Que no quede ni rastro de los precios viejos (1 € de alta, 28 días de
- *     prueba, 10 €/mes, 96 € al año).
+ *     prueba, 10 €/mes del atleta).
  *
  *   node --experimental-strip-types --import ./scripts/_ts-hook.mjs scripts/check-precios.mjs
  */
@@ -61,7 +61,7 @@ console.log('\n1 · Los cuatro precios del modelo');
 ok('el primer año del entrenador son 27 €', COACH_FIRST_YEAR_EUR === 27, String(COACH_FIRST_YEAR_EUR));
 ok('el primer año del atleta son 17 €', ATHLETE_FIRST_YEAR_EUR === 17, String(ATHLETE_FIRST_YEAR_EUR));
 ok('la renovación del entrenador son 180 €', ANNUAL_PRICE_EUR === 180, String(ANNUAL_PRICE_EUR));
-ok('la renovación del atleta son 95 €', ATHLETE_ANNUAL_EUR === 95, String(ATHLETE_ANNUAL_EUR));
+ok('la renovación del atleta son 96 €', ATHLETE_ANNUAL_EUR === 96, String(ATHLETE_ANNUAL_EUR));
 // Entrar tiene que costar menos que quedarse: es la promesa entera del primer
 // año. Si alguna vez dejara de cumplirse, la web estaría mintiendo sola.
 ok('entrar cuesta menos que renovar (entrenador)', COACH_FIRST_YEAR_EUR < ANNUAL_PRICE_EUR);
@@ -80,10 +80,15 @@ ok(
   ATHLETE_FIRST_YEAR_MONTHLY_EUR === Math.round((ATHLETE_FIRST_YEAR_EUR / 12) * 100) / 100,
   String(ATHLETE_FIRST_YEAR_MONTHLY_EUR)
 );
+// Los dos redondos no son casualidad: 180/12 son 15 y 96/12 son 8 exactos, y
+// un titular con decimales se lee peor. Si alguna vez dejan de serlo, la web
+// tendrá que escribir "7,92 € al mes" y conviene enterarse aquí.
 ok('la renovación del entrenador son 15 € al mes', COACH_MONTHLY_EQUIV_EUR === 15);
 ok(
   `la renovación del atleta son ${euros(ATHLETE_MONTHLY_EQUIV_EUR)} al mes`,
-  ATHLETE_MONTHLY_EQUIV_EUR === Math.round((ATHLETE_ANNUAL_EUR / 12) * 100) / 100
+  ATHLETE_MONTHLY_EQUIV_EUR === 8 &&
+    ATHLETE_MONTHLY_EQUIV_EUR === Math.round((ATHLETE_ANNUAL_EUR / 12) * 100) / 100,
+  String(ATHLETE_MONTHLY_EQUIV_EUR)
 );
 
 // =========================================================================
@@ -124,7 +129,6 @@ const VIEJOS = [
   ['darme de alta por 1 €', /de alta · 1 €/],
   ['los 28 días de prueba', /28 días/],
   ['los 10 €/mes del atleta', /10\s*€\s*\/?\s*mes/],
-  ['los 96 € del año del atleta', /96\s*€/],
 ];
 for (const [que, re] of VIEJOS) {
   ok(`sin ${que}`, !re.test(web), 'sigue en web/index.html');

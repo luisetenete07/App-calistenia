@@ -26,32 +26,28 @@ import type { UserProfile } from './types';
 /**
  * Payment Links de Stripe. COBRAN DE VERDAD.
  *
- * LOS CUATRO DEL MODELO NUEVO
+ * LOS CUATRO DEL MODELO
  *
  *   - Primer año de entrenador:   27 €  (pago único)
  *   - Primer año de atleta:       17 €  (pago único)
  *   - Cuota anual de entrenador: 180 €/año  (el plan que quita el tope)
- *   - Cuota anual de atleta:      95 €/año
+ *   - Cuota anual de atleta:      96 €/año
  *
- * TRES ESTÁN VACÍOS A PROPÓSITO, Y ESO NO ES UN OLVIDO
+ * SON DE PRODUCCIÓN, Y ESO HAY QUE MIRARLO CADA VEZ
  *
- * Los precios cambiaron y los enlaces de Stripe todavía no existen. Dejar aquí
- * los antiguos habría sido lo peligroso: la web diría 27 € y la pasarela
- * cobraría 1 €, sin dar ningún error a nadie. Un enlace equivocado no se nota
- * al probar —la pasarela se abre, la tarjeta pasa, la cuenta se activa— y se
- * descubre mirando las cuentas del mes.
+ * NUNCA los de prueba (`buy.stripe.com/test_…`): abren la pasarela, aceptan la
+ * tarjeta, dan las gracias y no cobran nada, así que quien pulsara se quedaría
+ * convencido de haber pagado. Ya estuvieron publicados una vez, de ahí el
+ * guardián en scripts/check-pago-ios.mjs.
  *
- * Vacío, en cambio, se comporta solo: `entryCheckoutUrl` y
- * `subscriptionCheckoutUrl` devuelven null, y todo lo que los usa ya sabe que
- * sin enlace no se enseña el botón. Nadie puede pagar el importe que no es.
+ * Y cada producto al suyo: un enlace equivocado no se nota al probar —la
+ * pasarela se abre, la tarjeta pasa, la cuenta se activa— y se descubre
+ * mirando las cuentas del mes. Lo comprueba scripts/check-stripe.mjs.
  *
- * CÓMO SE RELLENAN
- *
- * En Stripe → Payments → Payment Links, uno por producto, y se pega aquí el de
- * PRODUCCIÓN (`buy.stripe.com/…`). NUNCA los de prueba (`buy.stripe.com/test_…`):
- * abren la pasarela, aceptan la tarjeta, dan las gracias y no cobran nada, así
- * que quien pulsara se quedaría convencido de haber pagado. Ya estuvieron
- * publicados una vez, de ahí el guardián en scripts/check-pago-ios.mjs.
+ * Si alguno hubiera que quitarlo, se deja VACÍO (''), nunca con el de otro
+ * importe: vacío se comporta solo —`entryCheckoutUrl` y
+ * `subscriptionCheckoutUrl` devuelven null y el botón no se enseña— y nadie
+ * puede pagar el importe que no es.
  *
  * Los dos del primer año son los MISMOS que van en `web/config.js`: la web los
  * usa para quien llega de fuera y la app para quien se registró sin pasar por
@@ -61,16 +57,23 @@ import type { UserProfile } from './types';
  * La app les añade `?client_reference_id=<uid>` para que el webhook active la
  * cuenta correcta sola, y `prefilled_email` para no hacer escribir el correo.
  */
-export const COACH_ENTRY_LINK: string = '';
-export const ATHLETE_ENTRY_LINK: string = '';
+export const COACH_ENTRY_LINK: string =
+  'https://buy.stripe.com/28E4gy8ezcCT70I43a3sI07';
+export const ATHLETE_ENTRY_LINK: string =
+  'https://buy.stripe.com/00w14mamH9qHetafLS3sI06';
 /**
  * La cuota anual del entrenador (180 €). Sigue siendo la de siempre: el precio
  * no ha cambiado, así que el enlace tampoco.
  */
 export const COACH_PAYMENT_LINK: string =
   'https://buy.stripe.com/eVqcN4cuP9qH70IgPW3sI02';
-/** La cuota anual del atleta (95 €). Pendiente: antes eran 96. */
-export const ATHLETE_ANNUAL_LINK: string = '';
+/**
+ * La cuota anual del atleta (96 €). También es la de siempre: el producto ya
+ * existía en Stripe con ese importe, y 96 es mejor titular que 95 porque son
+ * 8,00 € al mes exactos (ver lib/precios.ts).
+ */
+export const ATHLETE_ANNUAL_LINK: string =
+  'https://buy.stripe.com/3cIdR866rcCT98Q9nu3sI05';
 
 /**
  * Le pega al enlace el uid y el correo.
