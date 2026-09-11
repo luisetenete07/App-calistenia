@@ -7,7 +7,6 @@ import { Button } from './Button';
 import { Card } from './Card';
 import { EmptyState } from './EmptyState';
 import { CardsSkeleton } from './Skeleton';
-import { ScreenContainer } from './ScreenContainer';
 import { TextField } from './TextField';
 import { showToast } from './Toast';
 import { useAuth } from '../lib/auth-context';
@@ -90,15 +89,33 @@ export function PanelDeNutricion() {
   // un peso medio inventado.
   const ultimoPeso = pesos.length > 0 ? pesos[pesos.length - 1].weightKg : undefined;
 
+  /*
+   * DE QUIÉN SE CARGA, NO EL PERFIL ENTERO.
+   *
+   * Esto colgaba del objeto `profile`, y ese objeto es NUEVO cada vez que se
+   * relee la cuenta —al guardar los macros, al conectar los pasos, al volver de
+   * cualquier sitio que llame a `refreshProfile`—, aunque no haya cambiado ni
+   * una letra. Como `load` vive dentro de `useFocusEffect`, cada relectura de la
+   * cuenta disparaba una recarga completa de la sección: seis consultas a
+   * Firestore y la pantalla entera repintándose. Justo después de guardar los
+   * macros, que es cuando se notaba.
+   *
+   * Lo único que esta carga necesita saber de la cuenta es de QUIÉN carga. Con
+   * eso, recargar vuelve a ser lo que era: algo que pasa al entrar en la
+   * pestaña y cuando alguien guarda algo.
+   */
+  const uid = profile?.uid;
+  const trainerId = profile?.trainerId;
+
   const load = useCallback(async () => {
-    if (!profile) return;
+    if (!uid) return;
     const [planData, mealData, photoData, bookData, pesoData, pasoData] = await Promise.all([
-      getActiveNutritionPlanForClient(profile.uid),
-      getMealLogsForClient(profile.uid),
-      getProgressPhotosForClient(profile.uid),
-      profile.trainerId ? getMealBooksForTrainer(profile.trainerId).catch(() => []) : Promise.resolve([]),
-      getWeightLogsForClient(profile.uid).catch(() => []),
-      getStepLogsForClient(profile.uid).catch(() => [] as StepLog[]),
+      getActiveNutritionPlanForClient(uid),
+      getMealLogsForClient(uid),
+      getProgressPhotosForClient(uid),
+      trainerId ? getMealBooksForTrainer(trainerId).catch(() => []) : Promise.resolve([]),
+      getWeightLogsForClient(uid).catch(() => []),
+      getStepLogsForClient(uid).catch(() => [] as StepLog[]),
     ]);
     setPlan(planData);
     setMeals(mealData);
@@ -107,7 +124,7 @@ export function PanelDeNutricion() {
     setPesos(pesoData);
     setPasos(pasoData);
     setLoading(false);
-  }, [profile]);
+  }, [uid, trainerId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -523,18 +540,35 @@ export function PanelDeNutricion() {
         </Pressable>
       </Modal>
 
-      {/* Calculadora de macros (recalcular). */}
-      <Modal visible={calcOpen} animationType="slide" onRequestClose={() => setCalcOpen(false)}>
-        <ScreenContainer>
-          <View style={styles.calcHeader}>
-            <Text style={styles.title}>Calcular mis macros</Text>
-            <Pressable onPress={() => setCalcOpen(false)} hitSlop={8}>
-              <Ionicons name="close" size={24} color={colors.textMuted} />
-            </Pressable>
-          </View>
-          <MacroCalculator submitLabel="Guardar mis macros" onDone={handleSaveMacros} />
-        </ScreenContainer>
-      </Modal>
+      {/*
+        LA FICHA NUTRICIONAL, EN EL MISMO PANEL QUE EL RESTO DE FORMULARIOS.
+        
+        Era el único formulario de la app montado a mano: una pantalla completa
+        con SU PROPIO `ScreenContainer` dentro, es decir, otra área segura, otro
+        degradado de fondo, otro `KeyboardAvoidingView`, otro scroll y otra
+        animación de entrada, todo ello DENTRO de un `Modal`.
+        
+        Eso en el móvil no es equivalente a una pantalla: un `Modal` de Android
+        es una ventana aparte, y ni los márgenes del sistema ni el teclado se
+        comportan como en la pantalla de debajo. Los márgenes que se medían eran
+        los de la ventana de atrás —de ahí el salto del contenido nada más
+        abrirse— y el teclado no encogía esa ventana, así que al escribir el peso
+        el campo se quedaba debajo del teclado. Encima, el botón de atrás cerraba
+        el formulario entero y se perdía lo escrito.
+        
+        `Sheet` es el panel que usa toda la app —el de registrar una comida está
+        diez líneas más abajo— y resuelve eso: se cierra tocando fuera, tiene su
+        scroll con los toques que atraviesan el teclado, y es lo que ya funciona
+        en los móviles de verdad de quienes usan UDECA.
+      */}
+      <Sheet
+        visible={calcOpen}
+        onClose={() => setCalcOpen(false)}
+        titulo="Calcular mis macros"
+        descripcion="Con tus datos de ahora. Al guardar, tus objetivos del día se ponen al día."
+      >
+        <MacroCalculator submitLabel="Guardar mis macros" onDone={handleSaveMacros} />
+      </Sheet>
     </>
   );
 }
@@ -579,7 +613,6 @@ function MacroTile({
 }
 
 const styles = StyleSheet.create({
-  title: { ...typography.h1, color: colors.text, marginBottom: spacing.lg },
   section: { marginBottom: spacing.md },
   sectionTitle: { ...typography.h3, color: colors.text, marginBottom: spacing.sm },
   subtitulo: { ...typography.h3, color: colors.text, marginBottom: spacing.sm },
@@ -620,12 +653,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   recalcText: { ...typography.small, color: colors.primary, fontFamily: fonts.semiBold },
-  calcHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
-  },
   zoomBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.92)',

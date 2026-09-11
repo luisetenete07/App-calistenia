@@ -29,6 +29,22 @@ import type { UserProfile } from '../lib/types';
 const DIAS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 
 /**
+ * Cuánto espera la lectura automática antes de volver a leer.
+ *
+ * La lectura se dispara al abrir la pantalla y cada vez que la app vuelve al
+ * frente, y eso último pasa mucho más de lo que parece: al cerrar un diálogo del
+ * sistema, al volver del selector de fotos, al bajar la persiana de avisos. Cada
+ * lectura escucha el sensor cuatro segundos, escribe en Firestore y hace que el
+ * padre recargue la sección entera.
+ *
+ * Sin este plazo, tres idas y venidas seguidas son tres recargas de la pantalla
+ * en diez segundos: desde fuera, parpadeo. Un minuto es de sobra —los pasos no
+ * se miran al segundo— y deja la puerta abierta a leer otra vez en cuanto de
+ * verdad haya pasado algo.
+ */
+const ESPERA_ENTRE_LECTURAS_MS = 60 * 1000;
+
+/**
  * Los pasos del día, DENTRO de la tarjeta de hoy.
  *
  * Aquí y no en Progreso a propósito: los pasos no son entrenamiento, son el
@@ -65,6 +81,15 @@ export function ContadorDePasos({
 }) {
   const [aMano, setAMano] = useState('');
   const [leyendo, setLeyendo] = useState(false);
+  /**
+   * Una lectura a la vez, y no más de una por minuto sin pedirlo.
+   *
+   * En referencias y no en estado a propósito: son dos cosas que deciden si se
+   * lee, no cosas que se pinten. En estado, cada una haría repintar la tarjeta
+   * justo en el momento en el que se está intentando que no repinte tanto.
+   */
+  const leyendoRef = useRef(false);
+  const ultimaAutomaticaRef = useRef(0);
   const [cambiando, setCambiando] = useState(false);
   const { refreshProfile } = useAuth();
   /** De dónde salen sus pasos. Vacío = todavía no lo ha elegido. */
@@ -131,7 +156,14 @@ export function ContadorDePasos({
       showToast('El contador del móvil solo está en la app de iPhone o Android');
       return;
     }
-    setLeyendo(true);
+    // Dos lecturas a la vez son dos suscripciones al sensor y dos escrituras
+    // con el mismo dato. Pasaba al volver a la app justo después de abrirla.
+    if (leyendoRef.current) return;
+    leyendoRef.current = true;
+    // El aviso de "leyendo" es solo para quien lo ha pedido: encenderlo en las
+    // lecturas automáticas hacía parpadear la tarjeta sola, cada vez que la app
+    // volvía al frente, sin que nadie hubiera tocado nada.
+    if (!enSilencio) setLeyendo(true);
     try {
       const Pedometer = require('expo-sensors').Pedometer;
       if (!(await Pedometer.isAvailableAsync())) {
@@ -139,11 +171,23 @@ export function ContadorDePasos({
         return;
       }
       /*
-       * El permiso se PIDE la primera vez y ya está concedido las siguientes,
-       * así que esta llamada no molesta a nadie en las lecturas automáticas: si
-       * ya se dijo que sí, devuelve que sí sin enseñar nada.
+       * PEDIR EL PERMISO ES COSA DE QUIEN PULSA, NO DE LA APP SOLA.
+       *
+       * `requestPermissionsAsync` abre el diálogo del sistema si todavía no se
+       * ha concedido, y en Android ese diálogo manda la app al fondo y la
+       * devuelve al frente al cerrarse. Lo malo es quién escucha esa vuelta:
+       * este mismo componente, que reacciona leyendo otra vez... y volviendo a
+       * pedir el permiso. El resultado es el diálogo saliendo una y otra vez
+       * sobre una pantalla que no para de repintarse.
+       *
+       * En las lecturas automáticas solo se MIRA si ya está concedido. Si no lo
+       * está, no se lee y no se enseña nada: ya lo pedirá el propio alumno
+       * cuando conecte el contador o pulse actualizar, que es cuando el diálogo
+       * tiene sentido porque acaba de pedirlo él.
        */
-      const permiso = await Pedometer.requestPermissionsAsync();
+      const permiso = enSilencio
+        ? await Pedometer.getPermissionsAsync()
+        : await Pedometer.requestPermissionsAsync();
       if (!permiso.granted) {
         if (!enSilencio) showToast('Sin permiso de actividad no se pueden leer los pasos');
         return;
@@ -216,17 +260,20 @@ export function ContadorDePasos({
         }
         return;
       }
-      await guardar(
-        pasosAGuardar(pasosDeHoy(registrosRef.current), contados, { acumulativo: true }),
-        'telefono'
-      );
+      const deHoyAndroid = pasosDeHoy(registrosRef.current);
+      const sumado = pasosAGuardar(deHoyAndroid, contados, { acumulativo: true });
+      // Igual que en iPhone: en la lectura automática, si el número no cambia
+      // no se escribe. Cada escritura hace recargar la sección entera al padre.
+      if (enSilencio && sumado === (deHoyAndroid?.steps ?? 0)) return;
+      await guardar(sumado, 'telefono');
       if (!enSilencio) {
         showToast(frase`Sumados ${conMiles(contados)} pasos andados con la app abierta`);
       }
     } catch {
       if (!enSilencio) showToast('No se ha podido leer el contador del móvil');
     } finally {
-      setLeyendo(false);
+      leyendoRef.current = false;
+      if (!enSilencio) setLeyendo(false);
     }
   };
 
@@ -266,6 +313,12 @@ export function ContadorDePasos({
    */
   const leerSiToca = useCallback(() => {
     if (origen !== 'telefono' || Platform.OS === 'web') return;
+    // Volver al frente pasa muchas veces seguidas (un diálogo del sistema, la
+    // persiana de avisos, el selector de fotos). Leer en cada una es escribir y
+    // recargar la sección en cada una, y eso se ve como parpadeo.
+    const ahora = Date.now();
+    if (ahora - ultimaAutomaticaRef.current < ESPERA_ENTRE_LECTURAS_MS) return;
+    ultimaAutomaticaRef.current = ahora;
     leerDelTelefono({ enSilencio: true }).catch(() => {});
     /*
      * SOLO EL ORIGEN. Ni `leerDelTelefono` ni `registros`.

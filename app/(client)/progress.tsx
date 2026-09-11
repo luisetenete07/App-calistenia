@@ -132,18 +132,28 @@ export default function ProgressScreen() {
     return { ...mapa, ...muscleByExercise };
   }, [activeRoutine, muscleByExercise]);
 
+  /*
+   * Igual que en el panel de nutrición: esto dependía del objeto `profile`
+   * entero, que es nuevo cada vez que se relee la cuenta. Como `load` va dentro
+   * de `useFocusEffect`, guardar cualquier cosa que releyera el perfil recargaba
+   * también toda esta pantalla —entrenos, plan, ciclos y biblioteca— por debajo.
+   * De quién se carga es lo único que hace falta.
+   */
+  const uid = profile?.uid;
+  const trainerId = profile?.trainerId;
+
   const load = useCallback(async () => {
-    if (!profile) return;
+    if (!uid) return;
     const [weightData, workoutData] = await Promise.all([
-      getWeightLogsForClient(profile.uid),
-      getWorkoutLogsForClient(profile.uid),
+      getWeightLogsForClient(uid),
+      getWorkoutLogsForClient(uid),
     ]);
     setWeightLogs(weightData);
     setWorkoutLogs(workoutData);
     // Ejercicios del plan activo: solo se usan si esta cuenta puede elegir qué
     // sigue en su tabla (el atleta), pero se cargan siempre porque el plan ya
     // se consulta aquí y no cuesta nada.
-    getActiveRoutineForClient(profile.uid, profile.trainerId ?? profile.uid)
+    getActiveRoutineForClient(uid, trainerId ?? uid)
       .then((rutina) => {
         setActiveRoutine(rutina ?? null);
         const vistos = new Map<string, string>();
@@ -157,7 +167,7 @@ export default function ProgressScreen() {
       .catch(() => {});
     // Ciclos: si el entrenador planifica por bloques, el reparto se mide sobre
     // el bloque en curso y no sobre las últimas cuatro semanas sueltas.
-    getCyclesForClientSelf(profile.uid)
+    getCyclesForClientSelf(uid)
       .then(setCycles)
       .catch(() => {});
     setCached(cacheKey, {
@@ -168,7 +178,7 @@ export default function ProgressScreen() {
     // coach, para mostrar bien los isométricos aunque el registro sea antiguo.
     // El atleta es su propio entrenador, así que su biblioteca es la suya: sin
     // este respaldo se quedaba sin mapa muscular ni marcas en el informe.
-    getExerciseLibrary(profile.trainerId ?? profile.uid)
+    getExerciseLibrary(trainerId ?? uid)
       .then((library) => {
         const mmap: Record<string, string> = {};
         const gmap: Record<string, string> = {};
@@ -186,7 +196,7 @@ export default function ProgressScreen() {
       .catch(() => {});
     setLoading(false);
     setRefreshing(false);
-  }, [profile, cacheKey]);
+  }, [uid, trainerId, cacheKey]);
 
   useFocusEffect(
     useCallback(() => {
