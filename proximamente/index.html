@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Estamos actualizando el pago · UDECA</title>
-<meta name="description" content="Estamos cambiando los precios de UDECA y la pasarela abre en unas horas. Escríbenos y te damos acceso mientras tanto." />
+<title>El pago está cerrado un momento · UDECA</title>
+<meta name="description" content="La pasarela de UDECA está cerrada un momento. La app funciona: escríbenos y te damos acceso mientras tanto." />
 <meta name="robots" content="noindex" />
 <!--
   ESTA PÁGINA NO DEPENDE DE NADA. NI DE UN CSS, NI DE UNA FUENTE, NI DE UN LOGO.
@@ -15,22 +15,20 @@
 
   QUÉ ES ESTO
 
-  Es donde caen los botones de "empezar" de la web mientras el cobro no está
-  disponible. Ahora mismo lo está por el cambio de precios: la web ya dice 17 €
-  y 27 € el primer año, y los enlaces de Stripe con esos importes todavía no
-  existen.
+  Es donde caen los botones de "empezar" de la web cuando el cobro no está
+  disponible: `pagos.altaAtleta` / `pagos.altaCoach` en web/config.js apuntando
+  aquí en vez de a Stripe.
 
-  Mandar mientras tanto a los enlaces antiguos habría sido peor que esto: la
-  página diría un precio y la pasarela cobraría otro, sin dar ningún error a
-  nadie. Y antes de aquello los botones llevaban a un enlace de PRUEBA de
-  Stripe, que abre la pasarela, acepta la tarjeta y no cobra nada.
+  AHORA MISMO NO SE USA: los Payment Links del primer año están puestos y se
+  cobra con normalidad. Esta página se queda porque el día que haya que retirar
+  un enlace —un cambio de precio, un producto rehecho— hay que mandar a algún
+  sitio, y las dos alternativas son peores: dejar el enlace viejo cobra un
+  importe que no es el que anuncia la página, y un enlace de PRUEBA de Stripe
+  abre la pasarela, acepta la tarjeta y no cobra nada.
 
   Lo importante: NO es un "próximamente" de producto. La app funciona y se
-  puede usar hoy; lo único que no está abierto es el cobro. Por eso el botón
+  puede usar; lo único que no está abierto es el cobro. Por eso el botón
   principal lleva a la app, no a una lista de espera.
-
-  Cuando estén los Payment Links nuevos se pegan en web/config.js y en
-  lib/enlacesDeCobro.ts —los dos a la vez— y esta página deja de usarse.
 -->
 <style>
   :root {
@@ -102,13 +100,12 @@
 <main>
   <div class="wrap">
     <p class="eyebrow">Pagos</p>
-    <h1>Estamos actualizando el pago</h1>
+    <h1>El pago está cerrado un momento</h1>
     <p class="idiomas"><a href="#english">Read this page in English</a></p>
 
     <p>
-      Estamos cambiando los precios de UDECA y la pasarela vuelve a abrir en unas horas.
-      Preferimos decírtelo así antes que cobrarte un importe que ya no es el que ves en
-      la página.
+      Estamos poniendo al día la pasarela de pago y vuelve a abrir enseguida. Preferimos
+      decírtelo así antes que cobrarte un importe que no es el que ves en la página.
     </p>
 
     <h2>Pero la app se usa ya</h2>
@@ -135,11 +132,11 @@
     <hr />
 
     <p class="eyebrow">Payments</p>
-    <h1 id="english">We are updating our pricing</h1>
+    <h1 id="english">Checkout is closed for a moment</h1>
 
     <p>
-      We are changing UDECA's prices and checkout reopens within hours. We would rather
-      tell you plainly than charge you an amount that no longer matches the page.
+      We are bringing our checkout up to date and it reopens shortly. We would rather
+      tell you plainly than charge you an amount that does not match the page.
     </p>
 
     <h2>The app already works</h2>
