@@ -100,6 +100,37 @@ ok(
   /const perso = isFlex \? routine\?\.personalizado : undefined;/.test(entreno)
 );
 
+/*
+ * Y QUE LO QUE SE GUARDA SEA LO QUE EL ENTRENADOR ACABA DE TOCAR.
+ *
+ * `handleSave` es un `useCallback`, así que congela todo lo que no esté
+ * declarado en sus dependencias. Sin `perso` ahí, guardaba la configuración tal
+ * y como estaba al ABRIR la pantalla —la de por defecto— y se perdían en
+ * silencio la escala, el vocabulario y los permisos. Desde fuera se ve como
+ * "la app no guarda los datos en personalizado", y es peor que un error: el
+ * plan sí se guarda, así que nada avisa de que falta la mitad.
+ */
+{
+  const deps = editorCoach.slice(
+    editorCoach.indexOf('const handleSave = useCallback'),
+    editorCoach.indexOf('const saveRoutineTemplate') > 0
+      ? editorCoach.indexOf('const saveRoutineTemplate')
+      : editorCoach.length
+  );
+  const lista = deps.slice(deps.lastIndexOf('}, ['), deps.lastIndexOf(']);') + 3);
+  ok(
+    'el guardado depende de la configuración tocada',
+    /\bperso\b/.test(lista) && /\bnivelesTexto\b/.test(lista),
+    lista.replace(/\s+/g, ' ').slice(0, 160)
+  );
+}
+// Corregir un entreno que lleve el esfuerzo del día tiene que estar permitido:
+// si no, la corrección entera se rechaza con "permisos insuficientes".
+ok(
+  'las reglas dejan corregir el esfuerzo de la sesión',
+  /hasOnly\(\['exercises', 'durationMin', 'feedback', 'esfuerzo'\]\)/.test(lee('firestore.rules'))
+);
+
 // =========================================================================
 console.log('\n3 · El RIR sigue siendo un RIR');
 // =========================================================================

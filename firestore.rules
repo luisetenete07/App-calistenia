@@ -372,13 +372,19 @@ service cloud.firestore {
       // quién es, de qué entrenador, qué día fue— queda fuera: si `date` se
       // pudiera cambiar, una sesión podría viajar a otro día y aparecer una
       // racha que nadie entrenó.
+      //
+      // `esfuerzo` es el de la SESIÓN entera, cuando el plan personalizado
+      // pregunta una sola vez al terminar en vez de ejercicio por ejercicio.
+      // Sin él en esta lista, corregir una sesión que lo llevara se rechazaba
+      // entera con "permisos insuficientes": el alumno perdía la corrección y
+      // no había forma de saber por qué.
       allow update: if request.auth != null
         && resource.data.clientId == request.auth.uid
         && request.resource.data.clientId == resource.data.clientId
         && request.resource.data.trainerId == resource.data.trainerId
         && request.resource.data.date == resource.data.date
         && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['exercises', 'durationMin', 'feedback']);
+             .hasOnly(['exercises', 'durationMin', 'feedback', 'esfuerzo']);
     }
 
     // Registros de peso de cada cliente.

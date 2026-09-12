@@ -814,7 +814,29 @@ export default function RoutineEditorScreen() {
     } finally {
       setSaving(false);
     }
-  }, [profile, clientId, routineId, name, days, schedule, scheduleLabel, cycleStartDate, router]);
+    /*
+     * `perso` y `nivelesTexto` NO SON OPCIONALES EN ESTA LISTA.
+     *
+     * Sin ellos, esto guardaba la configuración del plan personalizado tal y
+     * como estaba al abrir la pantalla —la de por defecto—, y no la que el
+     * entrenador acababa de tocar: `useCallback` congela lo que no se declara.
+     * Desde fuera se ve como "la app no guarda los datos en personalizado", y
+     * es peor que un error, porque el plan SÍ se guarda: lo que se pierde en
+     * silencio es la escala, el vocabulario y los permisos.
+     */
+  }, [
+    profile,
+    clientId,
+    routineId,
+    name,
+    days,
+    schedule,
+    scheduleLabel,
+    cycleStartDate,
+    perso,
+    nivelesTexto,
+    router,
+  ]);
 
   if (loading) return <LoadingScreen />;
 
