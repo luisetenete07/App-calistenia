@@ -107,6 +107,10 @@ export const EN: Record<string, string> = {
   'Apuntar serie': 'Log set',
   'Quitar la última': 'Remove the last one',
   'Añadir un ejercicio': 'Add an exercise',
+  // Los botones de serie usan la palabra del plan ("ronda", "vuelta"), así que
+  // la frase lleva hueco: la palabra la pone el entrenador y no se traduce.
+  'Quitar {0}': 'Remove {0}',
+  'Añadir {0}': 'Add {0}',
   'Elegir de mi biblioteca': 'Pick from my library',
   'o escríbelo a mano:': 'or type it by hand:',
   'Elegir de tu biblioteca': 'Pick from your library',
@@ -2306,6 +2310,56 @@ export const EN: Record<string, string> = {
   'Renueva y sigue con todo tu progreso y tus alumnos.':
     'Renew and carry on with all your progress and your students.',
   'Renovar': 'Renew',
+
+  // --- El plan personalizado (lib/planPersonalizado.ts) ---
+  //
+  // El tercer modo de programación: el entrenador monta su método y decide cómo
+  // funciona por dentro. Lo que NO se traduce son sus propias etiquetas de
+  // esfuerzo (A/B/C, "suave"…): las escribe él y son suyas en cualquier idioma.
+  'Crear personalizado': 'Build your own',
+  'Tu método, montado por ti: creas varias rutinas (las de abajo) y el alumno elige cuál hacer cada día. Y decides cómo funciona por dentro — en qué unidades se mide el esfuerzo, qué ve antes de elegir, cómo se llaman las cosas y qué puede tocar.':
+    'Your method, built by you: you create several routines (below) and your student picks which one to do each day. And you decide how it works inside — the units effort is measured in, what they see before choosing, what things are called and what they can change.',
+  'Ej. Personalizado': 'e.g. Custom',
+  'Personalizar cómo funciona': 'Customise how it works',
+  'Cómo se mide el esfuerzo': 'How effort is measured',
+  'RIR': 'RIR',
+  'La mía': 'Mine',
+  'Tus niveles, separados por comas (máx. {0})': 'Your levels, comma separated (max {0})',
+  'Ej. A, B, C, D': 'e.g. A, B, C, D',
+  'Cuándo se le pregunta': 'When they are asked',
+  'Al terminar': 'At the end',
+  'Nunca': 'Never',
+  'Qué ve antes de elegir': 'What they see before choosing',
+  'La intensidad en %': 'Intensity as a %',
+  'Cuántos ejercicios lleva': 'How many exercises it has',
+  'Cuánto dura, estimado': 'How long it takes, estimated',
+  'Qué grupos musculares toca': 'Which muscle groups it works',
+  'Cómo se llaman las cosas': 'What things are called',
+  'Cada rutina del plan': 'Each routine in the plan',
+  'Cada serie': 'Each set',
+  'Día': 'Day',
+  'Serie': 'Set',
+  'Qué puede tocar el alumno': 'What the student can change',
+  'Saltarse un ejercicio': 'Skip an exercise',
+  'Cambiar el orden': 'Change the order',
+  'Añadir uno de otra rutina': 'Add one from another routine',
+  'Creas varias rutinas (las de abajo) y antes de entrenar eliges cuál hacer según cómo te encuentres. Sin calendario fijo. Puedes marcar una como grease the groove: series sueltas repartidas por todo el día, ninguna al fallo.':
+    'You create several routines (below) and before training you pick which one to do depending on how you feel. No fixed calendar. You can mark one as grease the groove: single sets spread through the day, never to failure.',
+  '¿Cómo ha ido la sesión?': 'How did the session go?',
+  '¿A qué porcentaje has ido?': 'What percentage did you go at?',
+  '¿Cómo ha ido?': 'How did it go?',
+  'Subir': 'Move up',
+  'Bajar': 'Move down',
+  'Saltado': 'Skipped',
+  'Saltado hoy. Se guarda así para que tu entrenador lo sepa.':
+    'Skipped today. It is saved like this so your coach knows.',
+  'Añadir a la sesión de hoy': "Add to today's session",
+  'De las otras rutinas de tu plan. Solo para hoy: tu plan no cambia.':
+    'From the other routines in your plan. Today only: your plan does not change.',
+  'Ya tienes en la sesión todos los ejercicios de tu plan.':
+    'Your session already has every exercise in your plan.',
+  '{0}, añadido a la sesión de hoy': "{0}, added to today's session",
+  '≈ {0} min': '≈ {0} min',
 
   'Tu plan de atleta': 'Your athlete plan',
   'Tu plan de entrenador': 'Your coach plan',

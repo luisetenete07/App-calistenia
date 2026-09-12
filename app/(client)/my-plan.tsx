@@ -110,13 +110,26 @@ const STARTERS: Starter[] = [
   {
     key: 'gtg',
     label: 'Grease the groove · dominadas',
-    schedule: 'gtg',
-    gtgSetsPerDay: 6,
-    // Las repeticiones son el objetivo de CADA serie suelta, no del día: tres
-    // dominadas fáciles, seis veces repartidas. Y "series" queda en 1 porque en
-    // este modo la serie se apunta de una en una, según sale.
+    /*
+     * Grease the groove ya no es un plan entero, es una forma de hacer UN día
+     * (ver RoutineSchedule en lib/types.ts). Así que esta plantilla monta un
+     * plan personalizado con un único día marcado como tal: exactamente lo
+     * mismo que antes para quien la elija, y sin un cuarto modo que mantener.
+     *
+     * Las repeticiones son el objetivo de CADA serie suelta, no del día: tres
+     * dominadas fáciles, seis veces repartidas. Y "series" queda en 1 porque en
+     * este modo la serie se apunta de una en una, según sale.
+     */
+    schedule: 'flex',
+    scheduleLabel: 'Grease the groove',
     build: () => [
-      { id: nuevoId(), name: 'Dominadas todo el día', exercises: [ex('Dominadas', 1, '3')] },
+      {
+        id: nuevoId(),
+        name: 'Dominadas todo el día',
+        gtg: true,
+        gtgSetsPerDay: 6,
+        exercises: [ex('Dominadas', 1, '3')],
+      },
     ],
   },
 ];
@@ -130,7 +143,7 @@ export default function MyPlanScreen() {
   const [name, setName] = useState('Mi plan');
   const [days, setDays] = useState<RoutineDay[]>([]);
   const [schedule, setSchedule] = useState<RoutineSchedule>('weekly');
-  const [scheduleLabel, setScheduleLabel] = useState('Sensaciones');
+  const [scheduleLabel, setScheduleLabel] = useState('Personalizado');
   const [cycleStartDate, setCycleStartDate] = useState<number>(() => inicioDelDia(Date.now()));
   /*
    * La fecha con la que se abrió el plan. Solo si CAMBIA se anota que el ciclo
@@ -138,14 +151,6 @@ export default function MyPlanScreen() {
    * día que el propio atleta hubiera fijado desde la pantalla de entreno.
    */
   const fechaAlAbrir = useRef<number | null>(null);
-  // Series al día del modo grease the groove, como texto mientras se teclea.
-  const [gtgSets, setGtgSets] = useState('');
-  /** Las series al día en número; vacío o disparatado deja las de por defecto. */
-  const seriesAlDia = (): number | undefined => {
-    if (schedule !== 'gtg') return undefined;
-    const n = Number.parseInt(gtgSets, 10);
-    return Number.isFinite(n) && n > 0 ? n : undefined;
-  };
   // Qué días están desplegados. Todos cerrados al entrar, igual que en el
   // editor del coach: son el mismo editor con el mismo gesto, y abrir el
   // primero llenaba la pantalla de campos antes de saber qué se venía a tocar.
@@ -162,12 +167,24 @@ export default function MyPlanScreen() {
       if (r) {
         setRoutineId(r.id);
         setName(r.name);
-        setDays(r.days.length ? r.days : [newDay(1)]);
-        setSchedule(r.schedule ?? 'weekly');
+        /*
+         * Un plan viejo de grease the groove se abre como PERSONALIZADO, con su
+         * primer día marcado: ese modo ya no se puede elegir y dejarlo a medias
+         * sería un plan que la app no sabe editar. Igual que en el editor del
+         * entrenador; el porqué está en RoutineSchedule (lib/types.ts).
+         */
+        const modo = r.schedule ?? 'weekly';
+        setDays(
+          (r.days.length ? r.days : [newDay(1)]).map((d, i) =>
+            modo === 'gtg' && i === 0
+              ? { ...d, gtg: true, gtgSetsPerDay: d.gtgSetsPerDay ?? r.gtgSetsPerDay }
+              : d
+          )
+        );
+        setSchedule(modo === 'gtg' ? 'flex' : modo);
         if (r.scheduleLabel) setScheduleLabel(flexLabel(r.scheduleLabel));
         if (r.cycleStartDate) setCycleStartDate(r.cycleStartDate);
         fechaAlAbrir.current = r.cycleStartDate ?? null;
-        if (r.gtgSetsPerDay) setGtgSets(String(r.gtgSetsPerDay));
       } else {
         setRoutineId(null);
         setName('Mi plan');
@@ -216,7 +233,6 @@ export default function MyPlanScreen() {
   const applyStarter = (s: Starter) => {
     setSchedule(s.schedule);
     if (s.scheduleLabel) setScheduleLabel(s.scheduleLabel);
-    if (s.gtgSetsPerDay) setGtgSets(String(s.gtgSetsPerDay));
     const built = s.build();
     setDays(built);
     setExpanded(built.length ? { [built[0].id]: true } : {});
@@ -245,7 +261,6 @@ export default function MyPlanScreen() {
       cycleStartDate: schedule === 'cycle' ? cycleStartDate : undefined,
       cycleStartDateSetAt: cambioLaFecha ? Date.now() : undefined,
       scheduleLabel: schedule === 'flex' ? flexLabel(scheduleLabel) : undefined,
-      gtgSetsPerDay: seriesAlDia(),
     };
     if (cambioLaFecha) fechaAlAbrir.current = cycleStartDate;
     setSaving(true);
@@ -319,37 +334,21 @@ export default function MyPlanScreen() {
           opciones={[
             { valor: 'weekly' as RoutineSchedule, texto: 'Semana' },
             { valor: 'cycle' as RoutineSchedule, texto: 'Días sueltos' },
-            { valor: 'flex' as RoutineSchedule, texto: flexLabel(scheduleLabel) },
-            { valor: 'gtg' as RoutineSchedule, texto: 'Grease the groove' },
+            { valor: 'flex' as RoutineSchedule, texto: 'Crear personalizado' },
           ]}
           onChange={setSchedule}
         />
 
-        {schedule === 'gtg' ? (
+        {schedule === 'flex' ? (
           <>
             <Text style={styles.scheduleHint}>
-              Un ejercicio (o dos) repartido en series sueltas por todo el día, y ninguna al fallo:
-              cada serie se queda a la mitad de lo que podrías hacer. Se usa el primer día de abajo,
-              y en repeticiones va el objetivo de cada serie.
-            </Text>
-            <TextField
-              label="Series al día"
-              keyboardType="number-pad"
-              placeholder={String(SERIES_POR_DEFECTO)}
-              value={gtgSets}
-              onChangeText={setGtgSets}
-              style={{ marginTop: spacing.sm, marginBottom: 0 }}
-            />
-          </>
-        ) : schedule === 'flex' ? (
-          <>
-            <Text style={styles.scheduleHint}>
-              Creas varias rutinas (los "días" de abajo) y antes de entrenar eliges cuál hacer según
-              cómo te encuentres. Sin calendario fijo.
+              Creas varias rutinas (las de abajo) y antes de entrenar eliges cuál hacer según cómo te
+              encuentres. Sin calendario fijo. Puedes marcar una como grease the groove: series
+              sueltas repartidas por todo el día, ninguna al fallo.
             </Text>
             <TextField
               label="Nombre de esta programación"
-              placeholder="Ej. Sensaciones"
+              placeholder="Ej. Personalizado"
               value={scheduleLabel}
               onChangeText={setScheduleLabel}
               style={{ marginTop: spacing.sm, marginBottom: 0 }}

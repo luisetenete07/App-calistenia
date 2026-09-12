@@ -1,5 +1,6 @@
 import type { MuscleId } from './muscles';
 import type { PausaPlan } from './pausa';
+import type { EsfuerzoApuntado, PlanPersonalizado } from './planPersonalizado';
 
 // 'athlete' = usuario individual que se autoentrena (es su propio coach:
 // crea sus rutinas, sigue su progreso y nutrición). De pago mensual.
@@ -670,11 +671,23 @@ export interface RoutineDay {
  *    (Día 1 → 2 → 3 → ... → repite) independientemente del día de la semana.
  */
 /**
- * Cómo se programa una rutina.
+ * Cómo se programa una rutina. Son TRES:
  *
- * 'gtg' (grease the groove) no es una variante de las otras: es un método
- * distinto, con series fáciles repartidas por el día y sin llegar nunca al
- * fallo. Ver lib/gtg.ts.
+ *  - 'weekly': cada rutina se ata a un día de la semana.
+ *  - 'cycle': las rutinas rotan en bucle, sin mirar el calendario.
+ *  - 'flex': el plan PERSONALIZADO. El entrenador monta varias rutinas y el
+ *    alumno elige cuál hace cada día; y además el entrenador decide cómo
+ *    funciona el plan por dentro (ver lib/planPersonalizado.ts).
+ *
+ * 'gtg' ES HERENCIA Y YA NO SE PUEDE ELEGIR. Grease the groove seguía siendo
+ * un cuarto modo de plan entero, y no le pegaba: es una forma de entrenar UN
+ * día, no una programación. Donde vive ahora es donde tiene sentido — marcando
+ * un día suelto dentro del plan personalizado (`RoutineDay.gtg`), y en la
+ * rutina diaria de cada alumno, que es suya y va aparte.
+ *
+ * El valor se queda escrito aquí porque el código que lo lee tiene que seguir
+ * entendiéndolo: una rutina guardada con él no puede dejar de funcionar por
+ * haber quitado un botón.
  */
 export type RoutineSchedule = 'weekly' | 'cycle' | 'flex' | 'gtg';
 
@@ -734,6 +747,15 @@ export interface Routine {
    * por defecto (ver lib/gtg.ts).
    */
   gtgSetsPerDay?: number;
+  /**
+   * Cómo funciona por dentro este plan, si es el PERSONALIZADO ('flex').
+   *
+   * La escala con la que se mide el esfuerzo, cuándo se pregunta, qué ve el
+   * alumno antes de elegir rutina, cómo se llaman las cosas y qué puede tocar
+   * mientras entrena. Sin esto puesto, el plan se comporta como se ha
+   * comportado siempre: ver POR_DEFECTO en lib/planPersonalizado.ts.
+   */
+  personalizado?: PlanPersonalizado;
   /** (Obsoleto) intensidad global; ahora se define por día en RoutineDay. */
   intensity?: number;
   createdAt: number;
@@ -752,6 +774,12 @@ export interface RoutineTemplate {
   scheduleLabel?: string;
   cycleStartDate?: number;
   gtgSetsPerDay?: number;
+  /**
+   * La configuración del plan personalizado, para que una plantilla traiga
+   * también la FORMA de trabajar y no solo los ejercicios. Es justo lo que un
+   * entrenador no quiere volver a montar alumno por alumno.
+   */
+  personalizado?: PlanPersonalizado;
   days: RoutineDay[];
   createdAt: number;
 }
@@ -950,6 +978,21 @@ export interface LoggedExercise {
    * `UserProfile.trackRir`).
    */
   rir?: number;
+  /**
+   * Lo apuntado cuando el plan mide el esfuerzo con OTRA escala.
+   *
+   * En un plan personalizado el entrenador puede medir en porcentaje o con sus
+   * propias etiquetas (A/B/C, suave/medio/duro). Eso no cabe en `rir`, que es
+   * un número de repeticiones, y meterlo ahí haría falsas todas las medias que
+   * lo leen. Así que se guarda aparte y con su escala al lado: sin saber en qué
+   * unidades está, un "80" no significa nada.
+   *
+   * Con escala 'rir' se guardan LAS DOS COSAS: aquí para saber cómo se
+   * preguntó, y en `rir` para que todo lo que ya lo leía siga funcionando.
+   */
+  esfuerzo?: EsfuerzoApuntado;
+  /** El ejercicio lo saltó el alumno (solo si su plan se lo permite). */
+  saltado?: boolean;
   /** Cómo se midió (reps o segundos), para mostrar el histórico con su unidad. */
   measure?: ExerciseMeasure;
   /** Carga del ejercicio en su momento (normal/lastrado/asistido). */
@@ -966,6 +1009,15 @@ export interface WorkoutLog {
   date: number;
   exercises: LoggedExercise[];
   feedback?: string;
+  /**
+   * El esfuerzo de la SESIÓN ENTERA, cuando el plan personalizado pregunta una
+   * sola vez al terminar en vez de ejercicio por ejercicio.
+   *
+   * Son dos preguntas distintas y por eso son dos campos: "cómo ha ido este
+   * ejercicio" y "cómo ha ido el día". Meter la del día en el último ejercicio
+   * sería falsear el histórico de ese ejercicio para siempre.
+   */
+  esfuerzo?: EsfuerzoApuntado;
   /** Duración de la sesión en minutos (desde la primera serie completada). */
   durationMin?: number;
   createdAt: number;

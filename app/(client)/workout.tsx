@@ -27,7 +27,7 @@ import { getActiveRoutineForClient } from '../../lib/firestore/routines';
 import { getCyclesForClientSelf } from '../../lib/firestore/cycles';
 import { applyWeekPlan } from '../../lib/weekPlan';
 import { esfuerzoDePct, pctCombinado, textoIntensidad } from '../../lib/intensidad';
-import { RirPicker } from '../../components/RirPicker';
+import { SelectorDeEsfuerzo } from '../../components/SelectorDeEsfuerzo';
 import { diasDePausa, pausaActiva } from '../../lib/pausa';
 import { PressableScale } from '../../components/PressableScale';
 import { RegistrarOtroDia } from '../../components/RegistrarOtroDia';
@@ -42,6 +42,17 @@ import {
 } from '../../lib/firestore/workoutLogs';
 import { syncMySocialStats } from '../../lib/firestore/social';
 import { flexLabel, resolveTodaySession } from '../../lib/schedule';
+import {
+  comoLlamaALaRutina,
+  comoLlamaALaSerie,
+  comoRir,
+  enTitulo,
+  gruposDeLaRutina,
+  minutosEstimados,
+  rirComoValor,
+  tocaPreguntarEsfuerzo,
+  type EsfuerzoApuntado,
+} from '../../lib/planPersonalizado';
 import {
   conSerieAnadida,
   entrenoDeHoy,
@@ -99,6 +110,7 @@ import {
   type LoggedExercise,
   type Routine,
   type RoutineDay,
+  type RoutineExercise,
   type WorkoutLog,
 } from '../../lib/types';
 
@@ -617,6 +629,35 @@ export default function WorkoutScreen() {
   const dismissPastDraft = () => setPastDismissed(true);
 
   const isFlex = routine?.schedule === 'flex';
+  /*
+   * LA CONFIGURACIÓN DEL PLAN PERSONALIZADO, Y SOLO SI ES ESE PLAN.
+   *
+   * En los otros dos modos no existe y todo se comporta como siempre: el RIR se
+   * le pregunta a quien sabe contestarlo (el atleta, que se autoentrena, y el
+   * alumno que su entrenador haya marcado), y los días se llaman días.
+   */
+  const perso = isFlex ? routine?.personalizado : undefined;
+  const esfuerzoDelPlan = perso?.esfuerzo;
+  /** Lo de siempre: a quién se le pregunta cuando el plan no dice nada. */
+  const preguntaHeredada = profile?.role === 'athlete' || profile?.trackRir === true;
+  const pideEsfuerzoPorEjercicio = perso
+    ? tocaPreguntarEsfuerzo(perso, 'ejercicio')
+    : preguntaHeredada;
+  const pideEsfuerzoAlFinal = perso ? tocaPreguntarEsfuerzo(perso, 'sesion') : false;
+  /** Cómo llama este plan a una rutina y a una serie (Día y Serie por defecto). */
+  const palabraRutina = comoLlamaALaRutina(perso);
+  const palabraSerie = comoLlamaALaSerie(perso);
+  /**
+   * Qué se enseña de cada rutina en la pantalla de elegir.
+   *
+   * Sin plan personalizado (o sin tocar nada), lo de siempre: el porcentaje de
+   * intensidad y cuántos ejercicios lleva.
+   */
+  const ficha = perso?.ficha ?? { intensidad: true, ejercicios: true };
+  /** El esfuerzo de la sesión entera, cuando se pregunta una sola vez al final. */
+  const [esfuerzoSesion, setEsfuerzoSesion] = useState<EsfuerzoApuntado | undefined>();
+  /** El panel para añadir un ejercicio de otra rutina del plan. */
+  const [anadirAbierto, setAnadirAbierto] = useState(false);
   const day = combinedDay ?? routine?.days.find((d) => d.id === selectedDayId) ?? null;
   /*
    * El día de grease the groove, si toca. Puede venir de dos sitios: de una
@@ -688,6 +729,93 @@ export default function WorkoutScreen() {
     setLog(buildLog(combined));
     setViewIndex(0);
     startedAt.current = null;
+  };
+
+  /*
+   * LO QUE EL ALUMNO PUEDE TOCAR, SI SU PLAN SE LO PERMITE.
+   *
+   * Las tres cosas cambian el ORDEN o el CONTENIDO de la sesión, y eso obliga a
+   * mover dos listas a la vez: `log` (lo que se apunta) y los ejercicios del
+   * día (lo planificado: las repeticiones objetivo, el descanso, la superserie).
+   * La pantalla las cruza POR POSICIÓN, así que mover una sola las descoloca y
+   * el alumno acabaría viendo el objetivo de otro ejercicio.
+   *
+   * Por eso el día se "materializa" en una copia local (`combinedDay`) en
+   * cuanto se toca algo: la rutina del entrenador no se modifica nunca —lo que
+   * el alumno cambia es SU sesión de hoy—, y las dos listas se mueven juntas.
+   */
+  const diaEditable = (): RoutineDay | null => {
+    if (combinedDay) return combinedDay;
+    const base = routine?.days.find((d) => d.id === selectedDayId);
+    return base ? { ...base, id: `propio-${Date.now()}`, exercises: [...base.exercises] } : null;
+  };
+
+  const puedeSaltar = !!perso?.permisos?.saltar;
+  const puedeReordenar = !!perso?.permisos?.reordenar;
+  const puedeAnadir = !!perso?.permisos?.anadir;
+
+  /** Sube o baja un ejercicio, moviendo a la vez lo apuntado y lo planificado. */
+  const moverEjercicio = (desde: number, hacia: number) => {
+    const dia = diaEditable();
+    if (!dia || hacia < 0 || hacia >= log.length) return;
+    const mueve = <T,>(lista: T[]): T[] => {
+      const copia = [...lista];
+      const [fuera] = copia.splice(desde, 1);
+      copia.splice(hacia, 0, fuera);
+      return copia;
+    };
+    setCombinedDay({ ...dia, exercises: mueve(dia.exercises) });
+    setLog((prev) => mueve(prev));
+    setViewIndex(hacia);
+  };
+
+  /**
+   * Saltarse un ejercicio: se marca y se queda a la vista, tachado.
+   *
+   * No se borra a propósito. Borrarlo dejaría una sesión que parece completa y
+   * un entrenador que no se entera de que ese ejercicio lleva tres semanas sin
+   * hacerse, que es justo el dato que necesita. Marcado, el alumno avanza y el
+   * coach lo ve.
+   */
+  const alternarSaltado = (indice: number) => {
+    setLog((prev) =>
+      prev.map((ex, i) =>
+        i === indice
+          ? {
+              ...ex,
+              saltado: !ex.saltado,
+              // Al saltarlo, lo que hubiera apuntado deja de contar como hecho.
+              sets: ex.saltado ? ex.sets : ex.sets.map((set) => ({ ...set, completed: false })),
+            }
+          : ex
+      )
+    );
+  };
+
+  /** Añade a la sesión de hoy un ejercicio de otra rutina del mismo plan. */
+  const anadirEjercicio = (ex: RoutineExercise) => {
+    const dia = diaEditable();
+    if (!dia) return;
+    // Sin superserie: encadenarlo con el anterior sería heredar una relación
+    // que existía en OTRA rutina, donde iba detrás de otro ejercicio.
+    const suelto: RoutineExercise = { ...ex, id: `extra-${Date.now()}`, supersetWithPrevious: false };
+    setCombinedDay({ ...dia, exercises: [...dia.exercises, suelto] });
+    setLog((prev) => [
+      ...prev,
+      {
+        exerciseId: suelto.exerciseId,
+        name: suelto.name,
+        measure: suelto.measure,
+        load: suelto.load,
+        sets: Array.from({ length: Math.max(1, suelto.sets) }, () => ({
+          reps: '',
+          completed: false,
+        })),
+      },
+    ]);
+    setAnadirAbierto(false);
+    setViewIndex(log.length);
+    showToast(frase`${suelto.name}, añadido a la sesión de hoy`);
   };
 
   // Sensaciones: marca hoy como descanso (no afecta a la racha).
@@ -1047,7 +1175,7 @@ export default function WorkoutScreen() {
         const nextEx = day?.exercises[exerciseIndex + 1];
         const nextLabel =
           setIndex + 1 < setsInEx
-            ? frase`Ahora: Serie ${setIndex + 2} · ${exName}`
+            ? `${frase`Ahora`}: ${enTitulo(palabraSerie)} ${setIndex + 2} · ${exName}`
             : nextEx
               ? `Ahora: ${nextEx.name}`
               : 'Última serie hecha · guarda la sesión';
@@ -1113,24 +1241,32 @@ export default function WorkoutScreen() {
   };
 
   /**
-   * Esfuerzo del ejercicio (RIR). Se puede desmarcar volviendo a pulsar: si no
-   * se puede quitar un dato que se ha metido sin querer, la gente deja de
-   * meterlo.
+   * Esfuerzo del ejercicio, en la escala que use el plan.
+   *
+   * Se guarda con su escala al lado, y además como número en `rir` CUANDO ES UN
+   * RIR: así todo lo que ya leía ese campo —la media del bloque que ve el
+   * coach, el plan de la semana, los informes— sigue funcionando, y no se
+   * escribe nunca un porcentaje ni una letra donde se esperan repeticiones.
+   *
+   * Se puede desmarcar volviendo a pulsar: si no se puede quitar un dato que se
+   * ha metido sin querer, la gente deja de meterlo.
    */
-  const updateExerciseRir = (exerciseIndex: number, value: number) => {
+  const updateExerciseEsfuerzo = (exerciseIndex: number, valor: string) => {
+    const escala = esfuerzoDelPlan?.escala ?? 'rir';
     setLog((prev) =>
-      prev.map((ex, i) =>
-        i === exerciseIndex ? { ...ex, rir: ex.rir === value ? undefined : value } : ex
-      )
+      prev.map((ex, i) => {
+        if (i !== exerciseIndex) return ex;
+        const puesto = ex.esfuerzo?.valor ?? rirComoValor(ex.rir);
+        if (puesto === valor) return { ...ex, esfuerzo: undefined, rir: undefined };
+        return { ...ex, esfuerzo: { escala, valor }, rir: comoRir(escala, valor) };
+      })
     );
   };
 
-  // El esfuerzo solo se le pregunta a quien sabe contestarlo: al atleta
-  // siempre (se autoentrena) y al alumno que su entrenador haya marcado. A
-  // quien empieza, el RIR no le suena y lo rellenaría al azar.
-  const pideRir = profile?.role === 'athlete' || profile?.trackRir === true;
-
-  const totalSets = log.reduce((acc, ex) => acc + ex.sets.length, 0);
+  // Lo saltado no cuenta para el progreso: si contara, la sesión pediría
+  // series que el alumno ya ha decidido no hacer y el contador no llegaría
+  // nunca a completo.
+  const totalSets = log.reduce((acc, ex) => acc + (ex.saltado ? 0 : ex.sets.length), 0);
   const doneSets = log.reduce((acc, ex) => acc + ex.sets.filter((s) => s.completed).length, 0);
   // Índice visible en el modo enfocado (acotado por si la lista cambió).
   const safeIndex = Math.min(viewIndex, Math.max(0, log.length - 1));
@@ -1211,6 +1347,7 @@ export default function WorkoutScreen() {
     });
     setCorrigiendo(completedTodayLog.id);
     setLog(completedTodayLog.exercises);
+    setEsfuerzoSesion(completedTodayLog.esfuerzo);
     // La referencia pasa a ser lo ya guardado: así no se escribe un borrador
     // por el simple hecho de abrir la corrección, solo si se cambia algo.
     pristineRef.current = JSON.stringify(completedTodayLog.exercises);
@@ -1406,6 +1543,7 @@ export default function WorkoutScreen() {
         // Si estamos rellenando el entreno de otro día, se registra con SU fecha.
         date: resumeDate ?? Date.now(),
         exercises: finalLog,
+        ...(esfuerzoSesion ? { esfuerzo: esfuerzoSesion } : {}),
         ...(durationMin > 0 ? { durationMin } : {}),
       };
 
@@ -1421,6 +1559,7 @@ export default function WorkoutScreen() {
       if (corrigiendo) {
         await updateWorkoutLog(corrigiendo, {
           exercises: finalLog,
+          ...(esfuerzoSesion ? { esfuerzo: esfuerzoSesion } : {}),
           // La duración no se recalcula: la sesión duró lo que duró, y el rato
           // que se tarde en corregirla no es tiempo entrenando.
           ...(completedTodayLog?.durationMin ? { durationMin: completedTodayLog.durationMin } : {}),
@@ -1777,23 +1916,44 @@ export default function WorkoutScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.flexPickText, on && styles.flexPickTextOn]}>
-                      {d.name || 'Rutina'}
-                      {d.exercises.length
+                      {d.name || enTitulo(palabraRutina)}
+                      {ficha.ejercicios && d.exercises.length
                         ? ` · ${d.exercises.length} ${d.exercises.length === 1 ? 'ejercicio' : 'ejercicios'}`
                         : ''}
                     </Text>
-                    {/* Lo que va a pedir esa rutina, ANTES de elegirla: es
-                        justo el dato sobre el que se decide "cómo me siento
-                        hoy", y hasta ahora no estaba en ninguna parte. */}
+                    {/*
+                      LO QUE VA A PEDIR ESA RUTINA, ANTES DE ELEGIRLA.
+                      
+                      Es el dato sobre el que se decide "cómo me siento hoy", y
+                      cuál de ellos ayuda depende del método: al que programa por
+                      intensidad le sirve el porcentaje; al que tiene veinte
+                      minutos, la duración; al que reparte por grupos, los
+                      grupos. Por eso lo elige el entrenador en su plan en vez de
+                      enseñarlo todo y convertir la pantalla en una ficha técnica.
+                    */}
                     {d.gtg ? (
                       <Text style={styles.flexPickPct}>
                         Todo el día · {objetivoDelDia(routine, d)} series sueltas, ninguna al fallo
                       </Text>
-                    ) : d.intensityPct ? (
-                      <Text style={styles.flexPickPct}>
-                        {esfuerzoDePct(d.intensityPct)} · {d.intensityPct} %
-                      </Text>
-                    ) : null}
+                    ) : (
+                      (() => {
+                        const partes: string[] = [];
+                        if (ficha.intensidad && d.intensityPct) {
+                          partes.push(`${esfuerzoDePct(d.intensityPct)} · ${d.intensityPct} %`);
+                        }
+                        if (ficha.duracion) {
+                          const min = minutosEstimados(d.exercises);
+                          if (min > 0) partes.push(frase`≈ ${min} min`);
+                        }
+                        if (ficha.grupos) {
+                          const grupos = gruposDeLaRutina(d.exercises);
+                          if (grupos.length > 0) partes.push(grupos.join(' · '));
+                        }
+                        return partes.length > 0 ? (
+                          <Text style={styles.flexPickPct}>{partes.join('  ·  ')}</Text>
+                        ) : null;
+                      })()
+                    )}
                   </View>
                 </Pressable>
               );
@@ -2173,10 +2333,83 @@ export default function WorkoutScreen() {
                   <Text style={styles.exerciseCategory}>{categoriaEjercicio}</Text>
                 ) : null}
               </View>
-              {isDone ? (
+              {isDone && !exercise.saltado ? (
                 <Ionicons name="checkmark-circle" size={22} color={colors.primary} />
               ) : null}
             </View>
+
+            {/*
+              LO QUE EL ALUMNO PUEDE TOCAR (solo si su plan se lo permite).
+              
+              Va aquí arriba, junto al nombre, y no escondido al final: son
+              decisiones que se toman ANTES de empezar el ejercicio, mirándolo.
+            */}
+            {puedeSaltar || puedeReordenar ? (
+              <View style={styles.permisosFila}>
+                {puedeReordenar ? (
+                  <>
+                    <Pressable
+                      onPress={() => moverEjercicio(exerciseIndex, exerciseIndex - 1)}
+                      disabled={exerciseIndex === 0}
+                      style={styles.permisoBtn}
+                      hitSlop={6}
+                    >
+                      <Ionicons
+                        name="arrow-up"
+                        size={14}
+                        color={exerciseIndex === 0 ? colors.textFaint : colors.textMuted}
+                      />
+                      <Text style={styles.permisoTexto}>Subir</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => moverEjercicio(exerciseIndex, exerciseIndex + 1)}
+                      disabled={exerciseIndex >= log.length - 1}
+                      style={styles.permisoBtn}
+                      hitSlop={6}
+                    >
+                      <Ionicons
+                        name="arrow-down"
+                        size={14}
+                        color={
+                          exerciseIndex >= log.length - 1 ? colors.textFaint : colors.textMuted
+                        }
+                      />
+                      <Text style={styles.permisoTexto}>Bajar</Text>
+                    </Pressable>
+                  </>
+                ) : null}
+                {puedeSaltar ? (
+                  <Pressable
+                    onPress={() => alternarSaltado(exerciseIndex)}
+                    style={styles.permisoBtn}
+                    hitSlop={6}
+                  >
+                    <Ionicons
+                      name={exercise.saltado ? 'play-skip-forward' : 'play-skip-forward-outline'}
+                      size={14}
+                      color={exercise.saltado ? colors.primary : colors.textMuted}
+                    />
+                    <Text
+                      style={[
+                        styles.permisoTexto,
+                        exercise.saltado && { color: colors.primaryBright },
+                      ]}
+                    >
+                      {exercise.saltado ? 'Saltado' : 'Saltar'}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
+
+            {/* Saltado: se queda a la vista y se dice por qué. Borrarlo dejaría
+                una sesión que parece completa y un entrenador que no se entera
+                de que ese ejercicio lleva semanas sin hacerse. */}
+            {exercise.saltado ? (
+              <Text style={styles.saltadoAviso}>
+                Saltado hoy. Se guarda así para que tu entrenador lo sepa.
+              </Text>
+            ) : null}
             {planned ? (
               <View style={styles.metaRow}>
                 <View style={styles.metaChip}>
@@ -2185,7 +2418,13 @@ export default function WorkoutScreen() {
                     {isSeconds ? 's' : ''}
                   </Text>
                 </View>
-                {planned.rir !== undefined && planned.rir !== null ? (
+                {/* El objetivo de esfuerzo del coach, y solo si el plan mide
+                    en RIR: enseñar "RIR 1" a quien trabaja con letras o con
+                    porcentajes es darle un objetivo en unidades que su plan no
+                    usa. */}
+                {planned.rir !== undefined &&
+                planned.rir !== null &&
+                (esfuerzoDelPlan?.escala ?? 'rir') === 'rir' ? (
                   <View style={styles.metaChip}>
                     <Text style={styles.metaChipText}>RIR {planned.rir}</Text>
                   </View>
@@ -2303,8 +2542,12 @@ export default function WorkoutScreen() {
                         color={set.completed ? colors.onPrimary : colors.textFaint}
                       />
                     </View>
+                    {/* "Serie" solo si el plan no la llama de otra forma: hay
+                        métodos que trabajan por rondas o por vueltas, y llamar
+                        a las cosas como las llama el entrenador es la mitad de
+                        que el alumno entienda su plan. */}
                     <Text style={[styles.setLabel, set.completed && styles.setLabelDone]}>
-                      Serie {setIndex + 1}
+                      {enTitulo(palabraSerie)} {setIndex + 1}
                     </Text>
                   </PressableScale>
                 <TextField
@@ -2374,18 +2617,23 @@ export default function WorkoutScreen() {
               <View style={styles.setEditRow}>
                 <Pressable onPress={() => removeSet(exerciseIndex)} style={styles.setEditBtn} hitSlop={6}>
                   <Ionicons name="remove" size={16} color={colors.textMuted} />
-                  <Text style={styles.setEditText}>Quitar serie</Text>
+                  <Text style={styles.setEditText}>
+                    {frase`Quitar ${palabraSerie.toLowerCase()}`}
+                  </Text>
                 </Pressable>
                 <Pressable onPress={() => addSet(exerciseIndex)} style={styles.setEditBtn} hitSlop={6}>
                   <Ionicons name="add" size={16} color={colors.primary} />
-                  <Text style={[styles.setEditText, { color: colors.primary }]}>Añadir serie</Text>
+                  <Text style={[styles.setEditText, { color: colors.primary }]}>
+                    {frase`Añadir ${palabraSerie.toLowerCase()}`}
+                  </Text>
                 </Pressable>
               </View>
             ) : null}
-            {pideRir ? (
-              <RirPicker
-                value={exercise.rir}
-                onChange={(v) => updateExerciseRir(exerciseIndex, v)}
+            {pideEsfuerzoPorEjercicio ? (
+              <SelectorDeEsfuerzo
+                esfuerzo={esfuerzoDelPlan}
+                value={exercise.esfuerzo?.valor ?? rirComoValor(exercise.rir)}
+                onChange={(v) => updateExerciseEsfuerzo(exerciseIndex, v)}
               />
             ) : null}
             {noteOpenIndex === exerciseIndex || exercise.notes ? (
@@ -2418,6 +2666,45 @@ export default function WorkoutScreen() {
       })()}
 
       {saveError ? <Text style={styles.saveError}>{saveError}</Text> : null}
+
+      {/*
+        EL ESFUERZO DE LA SESIÓN, UNA SOLA VEZ.
+        
+        Cuando el entrenador prefiere preguntar una vez al terminar en vez de
+        ejercicio por ejercicio, la pregunta va AQUÍ: pegada al botón de
+        terminar, en el último ejercicio, que es el único momento en el que
+        alguien puede contestar "cómo ha ido el día" sabiendo de qué habla.
+      */}
+      {/* Añadir a la sesión de hoy un ejercicio de otra rutina del plan. Sale
+          al final, con el entreno en marcha: es una decisión de sobre la
+          marcha, no de antes de empezar. */}
+      {enMarcha && puedeAnadir ? (
+        <Pressable
+          onPress={() => setAnadirAbierto(true)}
+          style={styles.anadirBtn}
+          hitSlop={6}
+        >
+          <Ionicons name="add-circle-outline" size={16} color={colors.primary} />
+          <Text style={styles.anadirTexto}>Añadir un ejercicio</Text>
+        </Pressable>
+      ) : null}
+
+      {enMarcha && isLastExercise && pideEsfuerzoAlFinal ? (
+        <View style={styles.esfuerzoFinal}>
+          <SelectorDeEsfuerzo
+            esfuerzo={esfuerzoDelPlan}
+            etiqueta="¿Cómo ha ido la sesión?"
+            value={esfuerzoSesion?.valor}
+            onChange={(v) =>
+              setEsfuerzoSesion((prev) =>
+                prev?.valor === v
+                  ? undefined
+                  : { escala: esfuerzoDelPlan?.escala ?? 'rir', valor: v }
+              )
+            }
+          />
+        </View>
+      ) : null}
 
       {enMarcha && isLastExercise && doneSets === 0 ? (
         <Text style={styles.saveHint}>
@@ -2476,6 +2763,52 @@ export default function WorkoutScreen() {
       ) : null}
       </>
       )}
+
+      {/*
+        AÑADIR UN EJERCICIO: DE OTRA RUTINA DEL MISMO PLAN, NO DE LA NADA.
+        
+        Es deliberado. Un ejercicio escrito a mano entra sin identidad —sin
+        biblioteca, sin categoría, sin historial— y a partir de ahí sus marcas
+        no se comparan con nada y el mapa muscular no lo cuenta. Eligiendo de lo
+        que el entrenador ya ha puesto en el plan, lo añadido es un ejercicio de
+        verdad, con su histórico y sus récords desde el primer día.
+      */}
+      <Sheet
+        visible={anadirAbierto}
+        onClose={() => setAnadirAbierto(false)}
+        titulo="Añadir a la sesión de hoy"
+        descripcion="De las otras rutinas de tu plan. Solo para hoy: tu plan no cambia."
+      >
+        {(() => {
+          const yaPuestos = new Set(log.map((e) => e.exerciseId));
+          const candidatos = (routine?.days ?? [])
+            .flatMap((d) => d.exercises)
+            .filter((ex, i, todos) => {
+              if (yaPuestos.has(ex.exerciseId)) return false;
+              // Sin repetir: el mismo ejercicio puede estar en varias rutinas.
+              return todos.findIndex((o) => o.exerciseId === ex.exerciseId) === i;
+            });
+          if (candidatos.length === 0) {
+            return (
+              <Text style={styles.anadirVacio}>
+                Ya tienes en la sesión todos los ejercicios de tu plan.
+              </Text>
+            );
+          }
+          return candidatos.map((ex) => (
+            <Pressable key={ex.exerciseId} onPress={() => anadirEjercicio(ex)} style={styles.anadirFila}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.anadirNombre}>{ex.name}</Text>
+                <Text style={styles.anadirMeta}>
+                  {ex.sets} × {ex.reps}
+                  {ex.muscleGroup ? ` · ${ex.muscleGroup}` : ''}
+                </Text>
+              </View>
+              <Ionicons name="add" size={18} color={colors.primary} />
+            </Pressable>
+          ));
+        })()}
+      </Sheet>
     </ScreenContainer>
   );
 }
@@ -2744,6 +3077,37 @@ const styles = StyleSheet.create({
     color: colors.danger,
     textAlign: 'center',
     marginBottom: spacing.sm,
+  },
+  // La pregunta del día va separada del botón de terminar por un hueco: pegada
+  // a él se lee como parte del botón y se contesta sin mirar.
+  esfuerzoFinal: { marginTop: spacing.sm, marginBottom: spacing.sm },
+  permisosFila: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.xs },
+  anadirBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  anadirTexto: { ...typography.small, color: colors.primary, fontFamily: fonts.semiBold },
+  anadirFila: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.hairlineFaint,
+  },
+  anadirNombre: { ...typography.body, color: colors.text, fontFamily: fonts.semiBold },
+  anadirMeta: { ...typography.small, color: colors.textMuted, marginTop: 1 },
+  anadirVacio: { ...typography.small, color: colors.textMuted, paddingVertical: spacing.md },
+  permisoBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  permisoTexto: { ...typography.small, color: colors.textMuted, fontSize: 12 },
+  saltadoAviso: {
+    ...typography.small,
+    color: colors.textFaint,
+    fontSize: 12,
+    marginTop: spacing.xs,
   },
   saveHint: {
     ...typography.small,

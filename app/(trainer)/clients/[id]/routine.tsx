@@ -41,6 +41,15 @@ import { getClientsForTrainer, getUserProfile } from '../../../../lib/firestore/
 import { notifyUser } from '../../../../lib/notifications';
 import { flexLabel, nombreDelDia } from '../../../../lib/schedule';
 import { SERIES_POR_DEFECTO } from '../../../../lib/gtg';
+import {
+  MAX_NIVELES,
+  NIVELES_POR_DEFECTO,
+  nivelesDeTexto,
+  POR_DEFECTO,
+  type CuandoElEsfuerzo,
+  type EscalaDeEsfuerzo,
+  type PlanPersonalizado,
+} from '../../../../lib/planPersonalizado';
 import { generateRoutineDraft } from '../../../../lib/routineGenerator';
 import { minutosSegundos, segundosDeTexto } from '../../../../lib/duracion';
 import { nuevoId } from '../../../../lib/ids';
@@ -113,7 +122,21 @@ export default function RoutineEditorScreen() {
   const [newVideo, setNewVideo] = useState('');
   const [savingNew, setSavingNew] = useState(false);
   const [schedule, setSchedule] = useState<RoutineSchedule>('weekly');
-  const [scheduleLabel, setScheduleLabel] = useState('Sensaciones');
+  const [scheduleLabel, setScheduleLabel] = useState('Personalizado');
+  /*
+   * Cómo funciona por dentro el plan personalizado.
+   *
+   * Se guarda entero en la rutina (ver lib/planPersonalizado.ts): la escala con
+   * la que se mide el esfuerzo, cuándo se pregunta, qué ve el alumno antes de
+   * elegir, cómo se llaman las cosas y qué puede tocar.
+   */
+  const [perso, setPerso] = useState<PlanPersonalizado>(POR_DEFECTO);
+  // Las etiquetas de la escala propia se teclean seguidas, separadas por comas.
+  const [nivelesTexto, setNivelesTexto] = useState(NIVELES_POR_DEFECTO.join(', '));
+  const [personalizacionAbierta, setPersonalizacionAbierta] = useState(false);
+  /** Cambia una parte de la configuración sin pisar el resto. */
+  const cambiaPerso = (parte: Partial<PlanPersonalizado>) =>
+    setPerso((prev) => ({ ...prev, ...parte }));
   const [cycleStartDate, setCycleStartDate] = useState<number>(() => inicioDelDia(Date.now()));
   /*
    * La fecha con la que se abrió la rutina, para saber si el coach la ha
@@ -125,18 +148,25 @@ export default function RoutineEditorScreen() {
    * el ciclo, le estaría robando al alumno su día sin querer y sin enterarse.
    */
   const fechaAlAbrir = useRef<number | null>(null);
-  // Series al día del modo grease the groove, como texto mientras se teclea.
-  const [gtgSets, setGtgSets] = useState('');
   /**
-   * Las series al día, ya en número. Vacío o disparatado devuelve `undefined`,
-   * que no es lo mismo que cero: sin valor se usan las de por defecto, y con un
-   * cero guardado el alumno abriría la pantalla sin nada que hacer.
+   * La configuración tal y como se guarda.
+   *
+   * Las etiquetas de la escala propia se tecleaban en un campo de texto; aquí
+   * se convierten en lista. Y solo se guardan SI la escala es la propia: unas
+   * etiquetas colgando de un plan que mide en RIR son un ajuste invisible que
+   * reaparece el día que alguien cambie de escala y no entiende de dónde sale.
    */
-  const seriesAlDia = (): number | undefined => {
-    if (schedule !== 'gtg') return undefined;
-    const n = Number.parseInt(gtgSets, 10);
-    return Number.isFinite(n) && n > 0 ? n : undefined;
-  };
+  const configuracionAGuardar = (): PlanPersonalizado => ({
+    ...perso,
+    esfuerzo: {
+      escala: perso.esfuerzo?.escala ?? 'rir',
+      cuando: perso.esfuerzo?.cuando ?? 'ejercicio',
+      ...(perso.esfuerzo?.escala === 'propia'
+        ? { niveles: nivelesDeTexto(nivelesTexto) }
+        : {}),
+    },
+  });
+
   const [restText, setRestText] = useState<Record<string, string>>({});
   // Ejercicio pendiente de mover/copiar a otro día (abre el selector de día).
   const [movePicker, setMovePicker] = useState<{ dayId: string; ex: RoutineExercise } | null>(
@@ -172,11 +202,37 @@ export default function RoutineEditorScreen() {
         setRoutineId(existing.id);
         setName(existing.name);
         setDays(existing.days);
-        setSchedule(existing.schedule ?? 'weekly');
+        /*
+         * UN PLAN VIEJO DE GREASE THE GROOVE SE ABRE COMO PERSONALIZADO.
+         *
+         * Ese modo ya no se puede elegir (ver RoutineSchedule en lib/types.ts).
+         * Mantener su editor entero vivo para algo que nadie puede crear es
+         * pantalla muerta que hay que seguir arreglando; y dejar el plan a
+         * medias, con un modo que la app no sabe editar, es peor.
+         *
+         * Así que se lee como lo que de verdad es: un plan personalizado cuya
+         * primera rutina se hace en grease the groove, con sus series al día
+         * intactas. Nada se pierde y no queda ningún camino sin salida.
+         */
+        const modo = existing.schedule ?? 'weekly';
+        setSchedule(modo === 'gtg' ? 'flex' : modo);
+        if (modo === 'gtg') {
+          setDays((prev) =>
+            prev.map((d, i) =>
+              i === 0
+                ? { ...d, gtg: true, gtgSetsPerDay: d.gtgSetsPerDay ?? existing.gtgSetsPerDay }
+                : d
+            )
+          );
+        }
         if (existing.scheduleLabel) setScheduleLabel(flexLabel(existing.scheduleLabel));
         if (existing.cycleStartDate) setCycleStartDate(existing.cycleStartDate);
         fechaAlAbrir.current = existing.cycleStartDate ?? null;
-        if (existing.gtgSetsPerDay) setGtgSets(String(existing.gtgSetsPerDay));
+        if (existing.personalizado) {
+          setPerso({ ...POR_DEFECTO, ...existing.personalizado });
+          const niveles = existing.personalizado.esfuerzo?.niveles;
+          if (niveles?.length) setNivelesTexto(niveles.join(', '));
+        }
       } else {
         setDays([{ id: nuevoId(), name: 'Día 1', exercises: [] }]);
       }
@@ -662,6 +718,11 @@ export default function RoutineEditorScreen() {
     setName(t.name);
     setSchedule(t.schedule ?? 'weekly');
     if (t.scheduleLabel) setScheduleLabel(flexLabel(t.scheduleLabel));
+    if (t.personalizado) {
+      setPerso({ ...POR_DEFECTO, ...t.personalizado });
+      const niveles = t.personalizado.esfuerzo?.niveles;
+      if (niveles?.length) setNivelesTexto(niveles.join(', '));
+    }
     /*
      * La fecha de inicio del ciclo NO viene de la plantilla.
      *
@@ -671,7 +732,6 @@ export default function RoutineEditorScreen() {
      * que nada en la pantalla explicara por qué. Se queda la fecha que hay
      * puesta, que por defecto es hoy.
      */
-    setGtgSets(t.gtgSetsPerDay ? String(t.gtgSetsPerDay) : '');
     setDays(
       t.days.map((d) => ({
         ...d,
@@ -697,7 +757,7 @@ export default function RoutineEditorScreen() {
         name: name.trim() || 'Plantilla',
         schedule,
         scheduleLabel: schedule === 'flex' ? flexLabel(scheduleLabel) : undefined,
-        gtgSetsPerDay: seriesAlDia(),
+        personalizado: schedule === 'flex' ? configuracionAGuardar() : undefined,
         days,
       });
       setTemplates(await getRoutineTemplatesForTrainer(profile.uid));
@@ -723,7 +783,9 @@ export default function RoutineEditorScreen() {
         cycleStartDate: schedule === 'cycle' ? cycleStartDate : undefined,
         cycleStartDateSetAt: cambioLaFecha ? Date.now() : undefined,
         scheduleLabel: schedule === 'flex' ? flexLabel(scheduleLabel) : undefined,
-        gtgSetsPerDay: seriesAlDia(),
+        // Solo el plan personalizado la lleva: en los otros dos no significa
+        // nada, y guardarla ahí sería dejar escrito un ajuste que no se aplica.
+        personalizado: schedule === 'flex' ? configuracionAGuardar() : undefined,
       };
       if (cambioLaFecha) fechaAlAbrir.current = cycleStartDate;
       if (routineId) {
@@ -752,7 +814,7 @@ export default function RoutineEditorScreen() {
     } finally {
       setSaving(false);
     }
-  }, [profile, clientId, routineId, name, days, schedule, scheduleLabel, cycleStartDate, gtgSets, router]);
+  }, [profile, clientId, routineId, name, days, schedule, scheduleLabel, cycleStartDate, router]);
 
   if (loading) return <LoadingScreen />;
 
@@ -860,46 +922,186 @@ export default function RoutineEditorScreen() {
         <Segmented
           compacto
           valor={schedule}
+          /*
+            TRES MODOS, NO CUATRO.
+            
+            "Grease the groove" estaba aquí como un cuarto plan entero, y no le
+            pegaba: es una forma de entrenar UN día —series sueltas repartidas,
+            ninguna al fallo—, no una programación. Sigue existiendo en los dos
+            sitios donde significa algo: marcando un día suelto dentro del plan
+            personalizado, y en la rutina diaria de cada alumno.
+          */
           opciones={[
             { valor: 'weekly' as RoutineSchedule, texto: 'Semana' },
             { valor: 'cycle' as RoutineSchedule, texto: 'Días sueltos' },
-            { valor: 'flex' as RoutineSchedule, texto: flexLabel(scheduleLabel) },
-            { valor: 'gtg' as RoutineSchedule, texto: 'Grease the groove' },
+            { valor: 'flex' as RoutineSchedule, texto: 'Crear personalizado' },
           ]}
           onChange={setSchedule}
         />
 
-        {schedule === 'gtg' ? (
+        {schedule === 'flex' ? (
           <>
             <Text style={styles.scheduleHint}>
-              Un solo ejercicio (o dos), repartido en series sueltas a lo largo del día. Ninguna al
-              fallo: cada serie se queda a la mitad de lo que el alumno podría hacer. Se usa el
-              primer día de abajo; el objetivo por serie es el campo de repeticiones del ejercicio.
-            </Text>
-            <TextField
-              label="Series al día"
-              containerStyle={{ marginTop: spacing.md }}
-              keyboardType="number-pad"
-              placeholder={String(SERIES_POR_DEFECTO)}
-              value={gtgSets}
-              onChangeText={setGtgSets}
-              style={{ marginTop: spacing.sm, marginBottom: 0 }}
-            />
-          </>
-        ) : schedule === 'flex' ? (
-          <>
-            <Text style={styles.scheduleHint}>
-              Modo a elección: creas varias rutinas (los "días" de abajo) y el alumno, antes de
-              entrenar, elige cuál hacer según cómo se encuentre ese día. Sin calendario fijo.
+              Tu método, montado por ti: creas varias rutinas (las de abajo) y el alumno elige cuál
+              hacer cada día. Y decides cómo funciona por dentro — en qué unidades se mide el
+              esfuerzo, qué ve antes de elegir, cómo se llaman las cosas y qué puede tocar.
             </Text>
             <TextField
               label="Nombre de esta programación (lo ve el alumno)"
               containerStyle={{ marginTop: spacing.md }}
-              placeholder="Ej. Sensaciones"
+              placeholder="Ej. Personalizado"
               value={scheduleLabel}
               onChangeText={setScheduleLabel}
               style={{ marginTop: spacing.sm, marginBottom: 0 }}
             />
+            <Pressable
+              onPress={() => setPersonalizacionAbierta((v) => !v)}
+              style={styles.persoToggle}
+              hitSlop={6}
+            >
+              <Ionicons
+                name={personalizacionAbierta ? 'chevron-down' : 'chevron-forward'}
+                size={16}
+                color={colors.primary}
+              />
+              <Text style={styles.persoToggleTexto}>Personalizar cómo funciona</Text>
+            </Pressable>
+            {personalizacionAbierta ? (
+              <View style={styles.persoCaja}>
+                {/* 1 · LA ESCALA. Lo que el entrenador usa para hablar de
+                    esfuerzo con su gente. Si trabaja con letras, la app trabaja
+                    con letras. */}
+                <Text style={styles.persoTitulo}>Cómo se mide el esfuerzo</Text>
+                <Segmented
+                  compacto
+                  valor={perso.esfuerzo?.escala ?? 'rir'}
+                  opciones={[
+                    { valor: 'rir' as EscalaDeEsfuerzo, texto: 'RIR' },
+                    { valor: 'porcentaje' as EscalaDeEsfuerzo, texto: '%' },
+                    { valor: 'propia' as EscalaDeEsfuerzo, texto: 'La mía' },
+                  ]}
+                  onChange={(v) =>
+                    cambiaPerso({
+                      esfuerzo: {
+                        escala: v,
+                        cuando: perso.esfuerzo?.cuando ?? 'ejercicio',
+                        niveles: perso.esfuerzo?.niveles,
+                      },
+                    })
+                  }
+                />
+                {perso.esfuerzo?.escala === 'propia' ? (
+                  <TextField
+                    label={frase`Tus niveles, separados por comas (máx. ${MAX_NIVELES})`}
+                    containerStyle={{ marginTop: spacing.sm }}
+                    placeholder="Ej. A, B, C, D"
+                    value={nivelesTexto}
+                    onChangeText={setNivelesTexto}
+                    style={{ marginTop: spacing.xs, marginBottom: 0 }}
+                  />
+                ) : null}
+
+                {/* 2 · CUÁNDO. Preguntar por cada ejercicio es lo más fino y lo
+                    más pesado; una vez al terminar es lo que la mayoría
+                    contesta de verdad; y hay quien no quiere preguntar nada. */}
+                <Text style={styles.persoTitulo}>Cuándo se le pregunta</Text>
+                <Segmented
+                  compacto
+                  valor={perso.esfuerzo?.cuando ?? 'ejercicio'}
+                  opciones={[
+                    { valor: 'ejercicio' as CuandoElEsfuerzo, texto: 'Por ejercicio' },
+                    { valor: 'sesion' as CuandoElEsfuerzo, texto: 'Al terminar' },
+                    { valor: 'nunca' as CuandoElEsfuerzo, texto: 'Nunca' },
+                  ]}
+                  onChange={(v) =>
+                    cambiaPerso({
+                      esfuerzo: {
+                        escala: perso.esfuerzo?.escala ?? 'rir',
+                        cuando: v,
+                        niveles: perso.esfuerzo?.niveles,
+                      },
+                    })
+                  }
+                />
+
+                {/* 3 · LA FICHA. Lo que se lee antes de decidir "cómo me siento
+                    hoy": es la pantalla donde el plan personalizado se gana o
+                    se pierde. */}
+                <Text style={styles.persoTitulo}>Qué ve antes de elegir</Text>
+                <View style={styles.persoFichas}>
+                {(
+                  [
+                    ['intensidad', 'La intensidad en %'],
+                    ['ejercicios', 'Cuántos ejercicios lleva'],
+                    ['duracion', 'Cuánto dura, estimado'],
+                    ['grupos', 'Qué grupos musculares toca'],
+                  ] as const
+                ).map(([clave, texto]) => (
+                  <Chip
+                    key={clave}
+                    texto={texto}
+                    icono={perso.ficha?.[clave] ? 'eye' : 'eye-outline'}
+                    activo={!!perso.ficha?.[clave]}
+                    compacto
+                    onPress={() =>
+                      cambiaPerso({
+                        ficha: { ...perso.ficha, [clave]: !perso.ficha?.[clave] },
+                      })
+                    }
+                  />
+                ))}
+                </View>
+
+                {/* 4 · EL VOCABULARIO. Un entrenador que trabaja por bloques no
+                    quiere que su app diga "días". */}
+                <Text style={styles.persoTitulo}>Cómo se llaman las cosas</Text>
+                <TextField
+                  label="Cada rutina del plan"
+                  placeholder="Día"
+                  value={perso.vocabulario?.rutina ?? ''}
+                  onChangeText={(v) =>
+                    cambiaPerso({ vocabulario: { ...perso.vocabulario, rutina: v } })
+                  }
+                  style={{ marginBottom: spacing.sm }}
+                />
+                <TextField
+                  label="Cada serie"
+                  placeholder="Serie"
+                  value={perso.vocabulario?.serie ?? ''}
+                  onChangeText={(v) =>
+                    cambiaPerso({ vocabulario: { ...perso.vocabulario, serie: v } })
+                  }
+                  style={{ marginBottom: 0 }}
+                />
+
+                {/* 5 · LOS PERMISOS. Hasta ahora el plan era intocable y el
+                    alumno solo elegía rutina. Hay métodos que viven de lo
+                    contrario. */}
+                <Text style={styles.persoTitulo}>Qué puede tocar el alumno</Text>
+                <View style={styles.persoFichas}>
+                {(
+                  [
+                    ['saltar', 'Saltarse un ejercicio', 'barbell-outline'],
+                    ['reordenar', 'Cambiar el orden', 'swap-vertical-outline'],
+                    ['anadir', 'Añadir uno de otra rutina', 'add-circle-outline'],
+                  ] as const
+                ).map(([clave, texto, icono]) => (
+                  <Chip
+                    key={clave}
+                    texto={texto}
+                    icono={icono}
+                    activo={!!perso.permisos?.[clave]}
+                    compacto
+                    onPress={() =>
+                      cambiaPerso({
+                        permisos: { ...perso.permisos, [clave]: !perso.permisos?.[clave] },
+                      })
+                    }
+                  />
+                ))}
+                </View>
+              </View>
+            ) : null}
           </>
         ) : schedule === 'cycle' ? (
           <>
@@ -943,10 +1145,6 @@ export default function RoutineEditorScreen() {
           if (day.optionalRest) summaryParts.push(frase`Día ${dayIndex + 1}`, 'Descanso opcional');
           else if (day.isRest) summaryParts.push(frase`Día ${dayIndex + 1}`, 'Descanso');
           else summaryParts.push(frase`Día ${dayIndex + 1}`, `Intensidad ${day.intensity ?? 5}`);
-        } else if (schedule === 'gtg') {
-          summaryParts.push(
-            dayIndex === 0 ? frase`${seriesAlDia() ?? SERIES_POR_DEFECTO} series al día` : 'No se usa'
-          );
         } else if (schedule === 'flex') {
           if (day.isRest) summaryParts.push('Descanso');
           else if (day.gtg) {
@@ -1017,15 +1215,7 @@ export default function RoutineEditorScreen() {
             style={{ marginTop: spacing.sm }}
           />
 
-          {schedule === 'gtg' ? (
-            // No hay día de la semana ni intensidad que ajustar: en gtg se
-            // entrena todos los días y la intensidad es siempre baja a propósito.
-            <Text style={styles.optionalHint}>
-              {dayIndex === 0
-                ? 'Este es el día que se entrena. Pon uno o dos ejercicios y, en repeticiones, el objetivo de CADA serie suelta (la mitad de lo que el alumno podría hacer).'
-                : 'En grease the groove solo se usa el primer día. Este no se le muestra al alumno.'}
-            </Text>
-          ) : schedule === 'cycle' ? (
+          {schedule === 'cycle' ? (
             <>
             <View style={styles.cycleDayRow}>
               <View style={styles.cyclePill}>
@@ -1728,6 +1918,40 @@ const styles = StyleSheet.create({
   },
   checkRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   checkLabel: { ...typography.small, color: colors.text, flex: 1, lineHeight: 18 },
+  // El panel de personalización: cerrado por defecto para que el editor siga
+  // empezando por lo de siempre —los ejercicios—, y abierto de un toque para
+  // quien quiera montarse su método.
+  persoToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.md,
+  },
+  persoToggleTexto: {
+    ...typography.small,
+    color: colors.primary,
+    fontFamily: fonts.semiBold,
+  },
+  persoCaja: {
+    marginTop: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+    backgroundColor: colors.surfaceAlt,
+    gap: spacing.xs,
+  },
+  persoTitulo: {
+    ...typography.label,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  // En fila y envolviendo: son interruptores cortos, y en columna ocupaban
+  // media pantalla para decir cuatro palabras.
+  persoFichas: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   gtgFila: {
     flexDirection: 'row',
     alignItems: 'center',

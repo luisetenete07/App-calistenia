@@ -172,11 +172,17 @@ Debajo de la tabla, el **RIR reportado** de cada semana y, más pequeño, el que
 se pidió. En rojo cuando entrena a más de un punto por debajo de lo programado;
 menos que eso es ruido, no una señal.
 
-Se pregunta **al terminar cada ejercicio** (`components/RirPicker.tsx`), no por
-serie: por serie es lo que hace un laboratorio, por ejercicio es lo que un
+Se pregunta **al terminar cada ejercicio** (`components/SelectorDeEsfuerzo.tsx`),
+no por serie: por serie es lo que hace un laboratorio, por ejercicio es lo que un
 entrenador usa, y es un toque en vez de cuatro. Se puede desmarcar volviendo a
 pulsar, porque un dato que no se puede corregir es un dato que la gente deja de
 meter.
+
+**En un plan personalizado, la escala la elige el entrenador**: RIR, porcentaje
+o sus propias etiquetas, y una sola pregunta al terminar la sesión en vez de una
+por ejercicio, o ninguna (ver `lib/planPersonalizado.ts`). El campo `rir` del
+registro solo se escribe cuando la escala ES un RIR: un porcentaje guardado ahí
+haría falsas todas las medias de esta pantalla, que es peor que no tener media.
 
 **Solo se le pregunta a quien sabe contestarlo**: a los atletas siempre (se
 autoentrenan) y a los alumnos que su entrenador marque, desde la ficha del
